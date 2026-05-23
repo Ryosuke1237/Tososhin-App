@@ -1,7 +1,16 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { getTodayLabel } from "@/lib/mockData";
+import { createClient } from "@supabase/supabase-js";
+
+// クライアントサイド用Supabaseクライアント（遅延初期化）
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !url.startsWith("http") || !key) return null;
+  return createClient(url, key);
+}
 
 type FoodItem = {
   name: string;
@@ -18,7 +27,7 @@ type AnalysisResult = {
 
 type SavedMeal = {
   id: string;
-  time: string;
+  created_at: string;
   meal_type: string;
   foods: string;
   total_calories: number;
@@ -28,6 +37,7 @@ type SavedMeal = {
 export default function MealPage() {
   const dateLabel = getTodayLabel();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const today = new Date().toISOString().split("T")[0];
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -39,6 +49,36 @@ export default function MealPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [mealType, setMealType] = useState("食事");
   const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // ── 起動時：ユーザーIDと今日の食事記録を取得 ──
+  useEffect(() => {
+    const init = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+
+      // プロフィール取得
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .limit(1)
+        .single();
+
+      if (!profile) return;
+      setUserId(profile.id);
+
+      // 今日の食事記録を取得
+      const { data: logs } = await supabase
+        .from("meal_logs")
+        .select("*")
+        .eq("user_id", profile.id)
+        .eq("date", today)
+        .order("created_at", { ascending: true });
+
+      if (logs) setSavedMeals(logs);
+    };
+    init();
+  }, [today]);
 
   const processFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -53,9 +93,7 @@ export default function MealPage() {
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       setImagePreview(dataUrl);
-      // base64部分のみ抽出
-      const base64 = dataUrl.split(",")[1];
-      setImageBase64(base64);
+      setImageBase64(dataUrl.split(",")[1]);
     };
     reader.readAsDataURL(file);
   };
@@ -76,7 +114,6 @@ export default function MealPage() {
     if (!imageBase64) return;
     setIsAnalyzing(true);
     setError(null);
-
     try {
       const res = await fetch("/api/analyze-food", {
         method: "POST",
@@ -97,16 +134,38 @@ export default function MealPage() {
     if (!analysisResult) return;
     setIsSaving(true);
 
-    const newMeal: SavedMeal = {
-      id: Date.now().toString(),
-      time: new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }),
+    const foodsText = analysisResult.foods.map((f) => f.name).join("、");
+    const newMealData = {
       meal_type: mealType,
-      foods: analysisResult.foods.map((f) => f.name).join("、"),
+      foods: foodsText,
       total_calories: analysisResult.total_calories,
       total_protein: analysisResult.total_protein,
+      image_description: analysisResult.comment ?? "",
     };
 
-    setSavedMeals((prev) => [...prev, newMeal]);
+    // Supabaseに保存
+    const supabase = getSupabase();
+    if (supabase && userId) {
+      const { data, error: dbError } = await supabase
+        .from("meal_logs")
+        .insert({ user_id: userId, date: today, ...newMealData })
+        .select()
+        .single();
+
+      if (dbError) {
+        setError("保存に失敗しました: " + dbError.message);
+        setIsSaving(false);
+        return;
+      }
+      if (data) setSavedMeals((prev) => [...prev, data]);
+    } else {
+      // Supabase未設定時はローカル保存
+      setSavedMeals((prev) => [
+        ...prev,
+        { id: Date.now().toString(), created_at: new Date().toISOString(), ...newMealData },
+      ]);
+    }
+
     setImagePreview(null);
     setImageBase64(null);
     setAnalysisResult(null);
@@ -126,6 +185,11 @@ export default function MealPage() {
           <h1 className="page-title">🍽️ 食事ログ</h1>
           <p className="page-sub">{dateLabel} · AIが食事を自動解析</p>
         </div>
+        {userId ? (
+          <span style={{ fontSize: "11px", color: "var(--green)", fontWeight: 700 }}>● Supabase連携中</span>
+        ) : (
+          <span style={{ fontSize: "11px", color: "var(--gray)", fontWeight: 700 }}>○ ローカルモード</span>
+        )}
       </div>
 
       {/* ── 今日の合計 ── */}
@@ -215,25 +279,16 @@ export default function MealPage() {
               <p style={{ color: "var(--gray-l)", fontSize: "14px", fontWeight: 600 }}>
                 クリックまたはドラッグ＆ドロップ
               </p>
-              <p style={{ color: "var(--gray)", fontSize: "11px" }}>
-                JPG / PNG / HEIC 対応
-              </p>
+              <p style={{ color: "var(--gray)", fontSize: "11px" }}>JPG / PNG / HEIC 対応</p>
             </>
           )}
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          style={{ display: "none" }}
-        />
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
 
         {error && (
           <p style={{ color: "var(--red-b)", fontSize: "12px", marginTop: "8px" }}>⚠️ {error}</p>
         )}
 
-        {/* 解析ボタン */}
         {imagePreview && !analysisResult && (
           <button
             className="btn-primary"
@@ -254,77 +309,48 @@ export default function MealPage() {
             <span className="card-sub" style={{ color: "var(--green)" }}>✅ 解析完了</span>
           </div>
 
-          {/* 料理一覧 */}
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
             {analysisResult.foods.map((food, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "10px 14px",
-                  background: "var(--dark)",
-                  borderRadius: "8px",
-                  borderLeft: "3px solid var(--red)",
-                }}
-              >
+              <div key={i} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "10px 14px", background: "var(--dark)", borderRadius: "8px",
+                borderLeft: "3px solid var(--red)",
+              }}>
                 <span style={{ fontSize: "14px", fontWeight: 700 }}>{food.name}</span>
                 <div style={{ textAlign: "right" }}>
-                  <span style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "15px" }}>
-                    {food.calories}kcal
-                  </span>
-                  <span style={{ color: "var(--gray)", fontSize: "11px", marginLeft: "8px" }}>
-                    P: {food.protein}g
-                  </span>
+                  <span style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "15px" }}>{food.calories}kcal</span>
+                  <span style={{ color: "var(--gray)", fontSize: "11px", marginLeft: "8px" }}>P: {food.protein}g</span>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* 合計 */}
           <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            padding: "14px 16px",
-            background: "rgba(204,0,0,0.1)",
-            borderRadius: "8px",
-            border: "1px solid rgba(204,0,0,0.3)",
-            marginBottom: "12px",
+            display: "flex", justifyContent: "space-between", padding: "14px 16px",
+            background: "rgba(204,0,0,0.1)", borderRadius: "8px",
+            border: "1px solid rgba(204,0,0,0.3)", marginBottom: "12px",
           }}>
             <span style={{ fontWeight: 800, fontSize: "14px" }}>合計</span>
             <div style={{ textAlign: "right" }}>
-              <span style={{ color: "var(--red-b)", fontWeight: 900, fontSize: "18px" }}>
-                {analysisResult.total_calories}kcal
-              </span>
-              <span style={{ color: "var(--gray-l)", fontSize: "12px", marginLeft: "10px" }}>
-                タンパク質 {analysisResult.total_protein}g
-              </span>
+              <span style={{ color: "var(--red-b)", fontWeight: 900, fontSize: "18px" }}>{analysisResult.total_calories}kcal</span>
+              <span style={{ color: "var(--gray-l)", fontSize: "12px", marginLeft: "10px" }}>タンパク質 {analysisResult.total_protein}g</span>
             </div>
           </div>
 
-          {/* AIコメント */}
           {analysisResult.comment && (
             <p style={{ fontSize: "12px", color: "var(--gray-l)", marginBottom: "16px", fontStyle: "italic" }}>
               💬 {analysisResult.comment}
             </p>
           )}
 
-          {/* 保存ボタン */}
           <div style={{ display: "flex", gap: "10px" }}>
-            <button
-              className="btn-primary"
-              onClick={handleSave}
-              disabled={isSaving}
-              style={{ flex: 1, opacity: isSaving ? 0.7 : 1 }}
-            >
-              {isSaving ? "保存中..." : "💾 記録に保存する"}
+            <button className="btn-primary" onClick={handleSave} disabled={isSaving}
+              style={{ flex: 1, opacity: isSaving ? 0.7 : 1 }}>
+              {isSaving ? "保存中..." : "💾 Supabaseに保存する"}
             </button>
-            <button
-              className="btn-secondary"
+            <button className="btn-secondary"
               onClick={() => { setAnalysisResult(null); setImagePreview(null); setImageBase64(null); }}
-              style={{ padding: "0 16px" }}
-            >
+              style={{ padding: "0 16px" }}>
               やり直す
             </button>
           </div>
@@ -342,33 +368,24 @@ export default function MealPage() {
           <div style={{ textAlign: "center", padding: "32px 0", color: "var(--gray)" }}>
             <p style={{ fontSize: "32px", marginBottom: "8px" }}>🍽️</p>
             <p style={{ fontSize: "13px" }}>まだ記録がありません</p>
-            <p style={{ fontSize: "11px", marginTop: "4px" }}>上から写真をアップロードして記録しましょう</p>
+            <p style={{ fontSize: "11px", marginTop: "4px" }}>写真をアップロードして記録しましょう</p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {savedMeals.map((meal) => (
-              <div
-                key={meal.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "12px 16px",
-                  background: "var(--dark)",
-                  borderRadius: "10px",
-                  borderLeft: "3px solid var(--border)",
-                }}
-              >
+              <div key={meal.id} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "12px 16px", background: "var(--dark)", borderRadius: "10px",
+                borderLeft: "3px solid var(--border)",
+              }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "11px", color: "var(--gray)", fontWeight: 700 }}>{meal.time}</span>
+                    <span style={{ fontSize: "11px", color: "var(--gray)", fontWeight: 700 }}>
+                      {new Date(meal.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
                     <span style={{
-                      fontSize: "10px",
-                      padding: "2px 8px",
-                      background: "var(--border)",
-                      borderRadius: "10px",
-                      color: "var(--gray-l)",
-                      fontWeight: 700,
+                      fontSize: "10px", padding: "2px 8px", background: "var(--border)",
+                      borderRadius: "10px", color: "var(--gray-l)", fontWeight: 700,
                     }}>
                       {meal.meal_type}
                     </span>
@@ -377,8 +394,7 @@ export default function MealPage() {
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "16px" }}>
-                    {meal.total_calories}
-                    <span style={{ fontSize: "10px", fontWeight: 600 }}>kcal</span>
+                    {meal.total_calories}<span style={{ fontSize: "10px", fontWeight: 600 }}>kcal</span>
                   </div>
                   <div style={{ color: "var(--gray)", fontSize: "11px" }}>P: {meal.total_protein}g</div>
                 </div>

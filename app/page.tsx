@@ -1,12 +1,58 @@
-import { mockUser, mockKpi, mockProgress, mockChat, mockQuickReplies, getTodayQuote, getTodayLabel } from "@/lib/mockData";
+import { getProfile, getTodayRecord, getChatMessages, getScoreHistory } from "@/lib/db";
+import { mockKpi, mockProgress, mockChat, mockQuickReplies, getTodayQuote, getTodayLabel } from "@/lib/mockData";
 
-/* ─── スコア推移（ダミーデータ） ─── */
-const scoreHistory = [58, 63, 70, 67, 75, 78, 82];
-const maxScore = Math.max(...scoreHistory);
-
-export default function Dashboard() {
+export default async function Dashboard() {
   const quote = getTodayQuote();
   const dateLabel = getTodayLabel();
+
+  // ── Supabaseからデータ取得（失敗時はモックにフォールバック）──
+  const profile = await getProfile();
+  const todayRecord = profile ? await getTodayRecord(profile.id) : null;
+  const chatMessages = profile ? await getChatMessages(profile.id) : [];
+  const scoreHistory = profile ? await getScoreHistory(profile.id) : [58, 63, 70, 67, 75, 78, 82];
+
+  // ── ユーザー情報（DBまたはモック）──
+  const user = profile
+    ? {
+        name: profile.name,
+        nameInitial: profile.name_initial,
+        rank: profile.rank,
+        score: profile.score,
+        streak: profile.streak,
+      }
+    : { name: "Ryo-chan", nameInitial: "R", rank: "4回戦", score: 82, streak: 14 };
+
+  // ── KPI（DBまたはモック）──
+  const kpi = todayRecord
+    ? [
+        { id: "score",   icon: "🔥", value: String(todayRecord.score),   unit: "pt",   label: "闘争心スコア",       trend: `↑ 昨日比 +7pt`,       trendType: "up"      },
+        { id: "cal",     icon: "🍽️", value: todayRecord.calories.toLocaleString(), unit: "kcal", label: "今日の摂取カロリー", trend: "目標 2,200kcal",  trendType: "neutral" },
+        { id: "protein", icon: "💪", value: String(todayRecord.protein), unit: "g",    label: "タンパク質",         trend: `↑ 目標比 ${Math.round(todayRecord.protein/160*100)}%`, trendType: "up" },
+        { id: "weight",  icon: "⚖️", value: String(todayRecord.weight),  unit: "kg",   label: "体重",               trend: `↓ 先週比`,              trendType: "down"    },
+      ]
+    : mockKpi;
+
+  // ── 進捗（DBまたはモック）──
+  const progress = todayRecord
+    ? [
+        { icon: "🍽️", label: "食事記録",           value: `${todayRecord.meal_count} / 3食`,              pct: Math.round(todayRecord.meal_count / 3 * 100),     color: "linear-gradient(90deg,#880000,#ff2020)" },
+        { icon: "💪", label: "タンパク質充足",     value: `${Math.round(todayRecord.protein/160*100)}%`,  pct: Math.round(todayRecord.protein / 160 * 100),       color: "linear-gradient(90deg,#8a7030,#c8a84b)" },
+        { icon: "💧", label: "水分補給",           value: `${todayRecord.water_liters}L / 2.5L`,          pct: Math.round(todayRecord.water_liters / 2.5 * 100), color: "linear-gradient(90deg,#205080,#3a8fd1)" },
+        { icon: "🏋️", label: "今週のトレーニング", value: `${todayRecord.training_count} / 3回`,          pct: Math.round(todayRecord.training_count / 3 * 100), color: "linear-gradient(90deg,#880000,#ff2020)" },
+        { icon: "🛌", label: "睡眠時間",           value: `${todayRecord.sleep_hours}h / 7h`,             pct: Math.round(todayRecord.sleep_hours / 7 * 100),    color: "linear-gradient(90deg,#1a7040,#2ecc71)" },
+      ]
+    : mockProgress;
+
+  // ── チャット（DBまたはモック）──
+  const chat = chatMessages.length > 0
+    ? chatMessages.map((m) => ({
+        role: m.role,
+        text: m.text,
+        time: new Date(m.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }),
+      }))
+    : mockChat;
+
+  const maxScore = Math.max(...scoreHistory);
 
   return (
     <div className="page">
@@ -14,12 +60,12 @@ export default function Dashboard() {
       {/* ── ページヘッダー ── */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">おはようございます、{mockUser.name}さん</h1>
+          <h1 className="page-title">おはようございます、{user.name}さん</h1>
           <p className="page-sub">{dateLabel} · 今日も闘争心を燃やせ 🔥</p>
         </div>
         <div className="header-actions">
           <button className="btn-icon">🔔</button>
-          <div className="user-avatar-sm">{mockUser.nameInitial}</div>
+          <div className="user-avatar-sm">{user.nameInitial}</div>
         </div>
       </div>
 
@@ -45,7 +91,7 @@ export default function Dashboard() {
 
       {/* ── KPI グリッド ── */}
       <div className="kpi-grid">
-        {mockKpi.map((k) => (
+        {kpi.map((k) => (
           <div key={k.id} className={`kpi-card${k.id === "score" ? " primary" : ""}`}>
             <div className="kpi-icon">{k.icon}</div>
             <div>
@@ -68,11 +114,11 @@ export default function Dashboard() {
           <div className="card-header">
             <span className="card-title">今日の達成進捗</span>
             <span className="card-sub">
-              {mockProgress.filter((_, i) => i < 2).length} / {mockProgress.length}
+              {profile ? "Supabase連携中 ✅" : "モックデータ"}
             </span>
           </div>
           <div className="progress-list">
-            {mockProgress.map((item, i) => (
+            {progress.map((item, i) => (
               <div key={i} className="progress-item">
                 <div className="progress-meta">
                   <span className="progress-label">
@@ -82,7 +128,7 @@ export default function Dashboard() {
                   <span className="progress-val">{item.value}</span>
                 </div>
                 <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${item.pct}%`, background: item.color }} />
+                  <div className="progress-fill" style={{ width: `${Math.min(item.pct, 100)}%`, background: item.color }} />
                 </div>
               </div>
             ))}
@@ -133,7 +179,7 @@ export default function Dashboard() {
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px" }}>
               <span style={{ fontSize: "10px", color: "var(--gray)" }}>7日前</span>
-              <span style={{ fontSize: "10px", color: "var(--red-b)", fontWeight: 700 }}>今日 {mockUser.score}pt</span>
+              <span style={{ fontSize: "10px", color: "var(--red-b)", fontWeight: 700 }}>今日 {user.score}pt</span>
             </div>
           </div>
 
@@ -167,10 +213,10 @@ export default function Dashboard() {
         </div>
 
         <div className="chat-messages">
-          {mockChat.map((msg, i) => (
+          {chat.map((msg, i) => (
             <div key={i} className={`msg-row${msg.role === "user" ? " user" : ""}`}>
               <div className={`msg-avatar-sm ${msg.role === "trainer" ? "msg-avatar-trainer" : "msg-avatar-user"}`}>
-                {msg.role === "trainer" ? "高" : mockUser.nameInitial}
+                {msg.role === "trainer" ? "高" : user.nameInitial}
               </div>
               <div>
                 <div className={`msg-bubble${msg.role === "user" ? " user" : ""}`}>

@@ -12,8 +12,7 @@ export async function POST(req: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(apiKey)
 
-    // gemini-2.5-flash-preview が正式名称
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-05-20' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     const prompt = `この食事の写真を分析して、以下のJSON形式で返してください。
 JSONのみを返し、コードブロックや説明文は不要です。

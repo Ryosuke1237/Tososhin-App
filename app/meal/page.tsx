@@ -4,12 +4,15 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { getTodayLabel } from "@/lib/mockData";
 import { createClient } from "@supabase/supabase-js";
 
-// クライアントサイド用Supabaseクライアント（遅延初期化）
+// クライアントサイド用Supabaseクライアント（シングルトン）
+let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
+  if (_supabase) return _supabase;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !url.startsWith("http") || !key) return null;
-  return createClient(url, key);
+  _supabase = createClient(url, key);
+  return _supabase;
 }
 
 type FoodItem = {

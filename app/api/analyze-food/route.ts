@@ -11,7 +11,9 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+
+    // gemini-2.5-flash-preview が正式名称
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-05-20' })
 
     const prompt = `この食事の写真を分析して、以下のJSON形式で返してください。
 JSONのみを返し、コードブロックや説明文は不要です。
@@ -36,17 +38,19 @@ JSONのみを返し、コードブロックや説明文は不要です。
     ])
 
     const text = result.response.text().trim()
+    console.log('Gemini response:', text)
 
     // JSONを抽出（```json ブロックが含まれる場合も対応）
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'AI解析結果のパースに失敗しました' }, { status: 500 })
+      return NextResponse.json({ error: 'AI解析結果のパースに失敗しました', raw: text }, { status: 500 })
     }
 
     const data = JSON.parse(jsonMatch[0])
     return NextResponse.json(data)
-  } catch (err) {
-    console.error('analyze-food error:', err)
-    return NextResponse.json({ error: 'AI解析中にエラーが発生しました' }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('analyze-food error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

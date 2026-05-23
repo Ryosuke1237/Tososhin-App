@@ -55,16 +55,22 @@ export default function MealPage() {
   useEffect(() => {
     const init = async () => {
       const supabase = getSupabase();
-      if (!supabase) return;
+      if (!supabase) {
+        setError("⚠️ Supabase未接続（環境変数を確認してください）");
+        return;
+      }
 
       // プロフィール取得
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("id")
         .limit(1)
         .single();
 
-      if (!profile) return;
+      if (profileError || !profile) {
+        setError("⚠️ プロフィール取得失敗: " + (profileError?.message ?? "データなし"));
+        return;
+      }
       setUserId(profile.id);
 
       // 今日の食事記録を取得

@@ -107,6 +107,60 @@ export async function addChatMessage(
   }
 }
 
+// ─── 食事ログの型 ───────────────────────────────────────────
+export type MealLog = {
+  id: string
+  user_id: string
+  date: string
+  meal_type: string
+  foods: string
+  total_calories: number
+  total_protein: number
+  image_description: string
+  created_at: string
+}
+
+// ─── 食事ログ取得 ───────────────────────────────────────────
+export async function getMealLogs(userId: string, date: string): Promise<MealLog[]> {
+  if (!supabase) return []
+
+  const { data, error } = await supabase
+    .from('meal_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('date', date)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('getMealLogs error:', error.message)
+    return []
+  }
+  return data ?? []
+}
+
+// ─── 食事ログ保存 ───────────────────────────────────────────
+export async function addMealLog(
+  userId: string,
+  data: {
+    meal_type: string
+    foods: string
+    total_calories: number
+    total_protein: number
+    image_description: string
+  }
+): Promise<void> {
+  if (!supabase) return
+
+  const today = new Date().toISOString().split('T')[0]
+  const { error } = await supabase
+    .from('meal_logs')
+    .insert({ user_id: userId, date: today, ...data })
+
+  if (error) {
+    console.error('addMealLog error:', error.message)
+  }
+}
+
 // ─── スコア推移（過去7日）を取得 ───────────────────────────────────────────
 export async function getScoreHistory(userId: string): Promise<number[]> {
   if (!supabase) return [58, 63, 70, 67, 75, 78, 82]

@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { mockUser } from "@/lib/mockData";
 
 const navItems = [
-  { id: "dashboard", icon: "🏠", label: "ダッシュボード", badge: null },
-  { id: "meal",      icon: "🍽️", label: "食事ログ",       badge: null },
-  { id: "chat",      icon: "💬", label: "高橋相談室",      badge: "24h" },
-  { id: "plan",      icon: "👑", label: "プラン",          badge: null },
+  { id: "dashboard", icon: "🏠", label: "ダッシュボード", badge: null,  href: "/"     },
+  { id: "meal",      icon: "🍽️", label: "食事ログ",       badge: null,  href: "/meal" },
+  { id: "chat",      icon: "💬", label: "高橋相談室",      badge: "24h", href: "/chat" },
+  { id: "plan",      icon: "👑", label: "プラン",          badge: null,  href: "/plan" },
 ];
 
 export default function Sidebar() {
-  const [active, setActive] = useState("dashboard");
+  const pathname = usePathname();
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -23,17 +25,21 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        {navItems.map((item) => (
-          <div
-            key={item.id}
-            className={`nav-link${active === item.id ? " active" : ""}`}
-            onClick={() => setActive(item.id)}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            <span>{item.label}</span>
-            {item.badge && <span className="badge">{item.badge}</span>}
-          </div>
-        ))}
+        {navItems.map((item) => {
+          const isActive =
+            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={`nav-link${isActive ? " active" : ""}`}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span>{item.label}</span>
+              {item.badge && <span className="badge">{item.badge}</span>}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="sidebar-footer">

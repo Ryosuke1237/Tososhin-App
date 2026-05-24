@@ -57,7 +57,8 @@ export default function MealPage() {
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [inputMode, setInputMode] = useState<"photo" | "text">("photo");
-  const [textFoods, setTextFoods] = useState<string[]>([""]);
+  const [textFoods, setTextFoods] = useState<{ name: string; qty: number }[]>([{ name: "", qty: 1 }]);
+  const [addingFoodQty, setAddingFoodQty] = useState(1);
   const [mealType, setMealType] = useState("食事");
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -150,15 +151,19 @@ export default function MealPage() {
   };
 
   const handleTextAnalyze = async () => {
-    const validFoods = textFoods.map((f) => f.trim()).filter(Boolean);
+    const validFoods = textFoods.filter((f) => f.name.trim());
     if (validFoods.length === 0) return;
+    // 数量を含めたテキストに変換（例：「焼き鳥モモ 2個」）
+    const foodNames = validFoods.map((f) =>
+      f.qty > 1 ? `${f.name.trim()} ${f.qty}個` : f.name.trim()
+    );
     setIsAnalyzing(true);
     setError(null);
     try {
       const res = await fetch("/api/analyze-food", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ foodNames: validFoods }),
+        body: JSON.stringify({ foodNames }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "計算に失敗しました");
@@ -346,23 +351,31 @@ export default function MealPage() {
               例：生ビール（中）、日本酒3合、ハイボール（大ジョッキ）、牛丼（並盛）
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+              {/* ヘッダー */}
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", padding: "0 4px" }}>
+                <span style={{ flex: 1, fontSize: "11px", color: "var(--gray)", fontWeight: 700 }}>料理名</span>
+                <span style={{ width: "80px", fontSize: "11px", color: "var(--gray)", fontWeight: 700, textAlign: "center" }}>個数</span>
+                <span style={{ width: "32px" }} />
+              </div>
+
               {textFoods.map((food, idx) => (
                 <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  {/* 料理名 */}
                   <input
                     type="text"
-                    value={food}
+                    value={food.name}
                     onChange={(e) => {
                       const updated = [...textFoods];
-                      updated[idx] = e.target.value;
+                      updated[idx] = { ...updated[idx], name: e.target.value };
                       setTextFoods(updated);
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        setTextFoods((prev) => [...prev, ""]);
+                        setTextFoods((prev) => [...prev, { name: "", qty: 1 }]);
                       }
                     }}
-                    placeholder={idx === 0 ? "例：生ビール（中）、日本酒3合" : "例：味噌汁、ハイボール（大）"}
+                    placeholder={idx === 0 ? "例：焼き鳥モモ" : "例：ハイボール"}
                     style={{
                       flex: 1, padding: "10px 14px", background: "var(--dark)",
                       border: "1px solid var(--border)", borderRadius: "8px",
@@ -371,6 +384,26 @@ export default function MealPage() {
                     onFocus={(e) => { e.target.style.borderColor = "var(--red)"; }}
                     onBlur={(e) => { e.target.style.borderColor = "var(--border)"; }}
                   />
+                  {/* 個数プルダウン */}
+                  <select
+                    value={food.qty}
+                    onChange={(e) => {
+                      const updated = [...textFoods];
+                      updated[idx] = { ...updated[idx], qty: Number(e.target.value) };
+                      setTextFoods(updated);
+                    }}
+                    style={{
+                      width: "80px", padding: "10px 8px", background: "var(--dark)",
+                      border: "1px solid var(--border)", borderRadius: "8px",
+                      color: "var(--white)", fontSize: "14px", fontWeight: 700,
+                      cursor: "pointer", outline: "none",
+                    }}
+                  >
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>{n}個</option>
+                    ))}
+                  </select>
+                  {/* 削除ボタン */}
                   {textFoods.length > 1 && (
                     <button
                       onClick={() => setTextFoods((prev) => prev.filter((_, i) => i !== idx))}
@@ -389,7 +422,7 @@ export default function MealPage() {
 
               {/* 料理を追加ボタン */}
               <button
-                onClick={() => setTextFoods((prev) => [...prev, ""])}
+                onClick={() => setTextFoods((prev) => [...prev, { name: "", qty: 1 }])}
                 style={{
                   padding: "10px", borderRadius: "8px", border: `1px dashed var(--border)`,
                   background: "transparent", color: "var(--gray)", fontSize: "13px",
@@ -403,8 +436,8 @@ export default function MealPage() {
             <button
               className="btn-primary"
               onClick={handleTextAnalyze}
-              disabled={isAnalyzing || textFoods.every((f) => !f.trim())}
-              style={{ width: "100%", opacity: (isAnalyzing || textFoods.every((f) => !f.trim())) ? 0.6 : 1 }}
+              disabled={isAnalyzing || textFoods.every((f) => !f.name.trim())}
+              style={{ width: "100%", opacity: (isAnalyzing || textFoods.every((f) => !f.name.trim())) ? 0.6 : 1 }}
             >
               {isAnalyzing ? "🤖 計算中..." : "🤖 AIでカロリーを計算する"}
             </button>
@@ -509,62 +542,94 @@ export default function MealPage() {
 
           {/* ── 料理を追加 ── */}
           {isAddingFood ? (
-            <div style={{ display: "flex", gap: "8px", marginBottom: "12px", alignItems: "center" }}>
-              <input
-                autoFocus
-                type="text"
-                value={addingFoodName}
-                onChange={(e) => setAddingFoodName(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter") {
-                    const name = addingFoodName.trim();
-                    if (!name || !analysisResult) return;
-                    setIsAddingCalc(true);
-                    try {
-                      const res = await fetch("/api/analyze-food", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ foodName: name }),
-                      });
-                      const data = await res.json();
-                      const newFood = { name, calories: data.calories ?? 0, protein: data.protein ?? 0 };
-                      const updatedFoods = [...analysisResult.foods, newFood];
-                      setAnalysisResult({
-                        ...analysisResult,
-                        foods: updatedFoods,
-                        total_calories: updatedFoods.reduce((s, f) => s + f.calories, 0),
-                        total_protein: updatedFoods.reduce((s, f) => s + f.protein, 0),
-                      });
-                    } finally {
-                      setIsAddingCalc(false);
-                      setAddingFoodName("");
-                      setIsAddingFood(false);
-                    }
-                  }
-                  if (e.key === "Escape") { setIsAddingFood(false); setAddingFoodName(""); }
-                }}
-                placeholder="例：生ビール（中）、日本酒3合、ハイボール（大）"
-                disabled={isAddingCalc}
-                style={{
-                  flex: 1, padding: "10px 14px", background: "var(--dark)",
-                  border: "1px solid var(--red)", borderRadius: "8px",
-                  color: "var(--white)", fontSize: "14px", fontWeight: 600, outline: "none",
-                  opacity: isAddingCalc ? 0.6 : 1,
-                }}
-              />
-              {isAddingCalc ? (
-                <span style={{ color: "var(--gray-l)", fontSize: "12px", whiteSpace: "nowrap" }}>計算中...</span>
-              ) : (
-                <button
-                  onClick={() => { setIsAddingFood(false); setAddingFoodName(""); }}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                {/* 料理名 */}
+                <input
+                  autoFocus
+                  type="text"
+                  value={addingFoodName}
+                  onChange={(e) => setAddingFoodName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { setIsAddingFood(false); setAddingFoodName(""); setAddingFoodQty(1); }
+                  }}
+                  placeholder="例：焼き鳥モモ、ハイボール"
+                  disabled={isAddingCalc}
                   style={{
-                    padding: "10px 14px", borderRadius: "8px", border: "1px solid var(--border)",
-                    background: "transparent", color: "var(--gray)", cursor: "pointer", fontSize: "12px",
+                    flex: 1, padding: "10px 14px", background: "var(--dark)",
+                    border: "1px solid var(--red)", borderRadius: "8px",
+                    color: "var(--white)", fontSize: "14px", fontWeight: 600, outline: "none",
+                    opacity: isAddingCalc ? 0.6 : 1,
+                  }}
+                />
+                {/* 個数プルダウン */}
+                <select
+                  value={addingFoodQty}
+                  onChange={(e) => setAddingFoodQty(Number(e.target.value))}
+                  disabled={isAddingCalc}
+                  style={{
+                    width: "80px", padding: "10px 8px", background: "var(--dark)",
+                    border: "1px solid var(--red)", borderRadius: "8px",
+                    color: "var(--white)", fontSize: "14px", fontWeight: 700,
+                    cursor: "pointer", outline: "none",
                   }}
                 >
-                  キャンセル
-                </button>
-              )}
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>{n}個</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {isAddingCalc ? (
+                  <span style={{ color: "var(--gray-l)", fontSize: "12px", padding: "10px 0" }}>計算中...</span>
+                ) : (
+                  <>
+                    <button
+                      onClick={async () => {
+                        const name = addingFoodName.trim();
+                        if (!name || !analysisResult) return;
+                        setIsAddingCalc(true);
+                        try {
+                          const foodText = addingFoodQty > 1 ? `${name} ${addingFoodQty}個` : name;
+                          const res = await fetch("/api/analyze-food", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ foodName: foodText }),
+                          });
+                          const data = await res.json();
+                          const newFood = { name: foodText, calories: data.calories ?? 0, protein: data.protein ?? 0 };
+                          const updatedFoods = [...analysisResult.foods, newFood];
+                          setAnalysisResult({
+                            ...analysisResult,
+                            foods: updatedFoods,
+                            total_calories: updatedFoods.reduce((s, f) => s + f.calories, 0),
+                            total_protein: updatedFoods.reduce((s, f) => s + f.protein, 0),
+                          });
+                        } finally {
+                          setIsAddingCalc(false);
+                          setAddingFoodName("");
+                          setAddingFoodQty(1);
+                          setIsAddingFood(false);
+                        }
+                      }}
+                      disabled={!addingFoodName.trim()}
+                      className="btn-primary"
+                      style={{ flex: 1, opacity: !addingFoodName.trim() ? 0.5 : 1 }}
+                    >
+                      追加する
+                    </button>
+                    <button
+                      onClick={() => { setIsAddingFood(false); setAddingFoodName(""); setAddingFoodQty(1); }}
+                      style={{
+                        padding: "10px 14px", borderRadius: "8px", border: "1px solid var(--border)",
+                        background: "transparent", color: "var(--gray)", cursor: "pointer", fontSize: "12px",
+                      }}
+                    >
+                      キャンセル
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ) : (
             <button
@@ -609,7 +674,7 @@ export default function MealPage() {
                 setAnalysisResult(null);
                 setImagePreview(null);
                 setImageBase64(null);
-                setTextFoods([""]);
+                setTextFoods([{ name: "", qty: 1 }]);
                 if (fileInputRef.current) fileInputRef.current.value = "";
               }}
               style={{ padding: "0 16px" }}>

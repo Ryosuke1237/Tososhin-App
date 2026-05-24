@@ -37,7 +37,7 @@ export default async function Dashboard() {
   const nutritionProgress = [
     { icon: "🔥", label: "総摂取カロリー", value: `${nutrition.calories.toLocaleString()} / 2,200kcal`, pct: Math.min(Math.round(nutrition.calories / 2200 * 100), 100), color: "linear-gradient(90deg,#880000,#ff2020)" },
     { icon: "💪", label: "タンパク質（蛋）", value: `${nutrition.protein}g / 160g`,   pct: Math.min(Math.round(nutrition.protein / 160 * 100), 100),  color: "linear-gradient(90deg,#1a4a8a,#3a8fd1)" },
-    { icon: "🌾", label: "炭水化物（糖）",  value: `${nutrition.carbs}g / 250g`,     pct: Math.min(Math.round(nutrition.carbs / 250 * 100), 100),    color: "linear-gradient(90deg,#555,#ffffff)" },
+    { icon: "🌾", label: "炭水化物（糖）",  value: `${nutrition.carbs}g / 250g`,     pct: Math.min(Math.round(nutrition.carbs / 250 * 100), 100),    color: "#ffffff" },
     { icon: "🧈", label: "脂質（脂）",      value: `${nutrition.fat}g / 70g`,        pct: Math.min(Math.round(nutrition.fat / 70 * 100), 100),       color: "linear-gradient(90deg,#8a6a00,#fbbf24)" },
   ];
 

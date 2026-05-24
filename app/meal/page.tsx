@@ -147,8 +147,8 @@ export default function MealPage() {
     const newMealData = {
       meal_type: mealType,
       foods: foodsText,
-      total_calories: analysisResult.total_calories,
-      total_protein: analysisResult.total_protein,
+      total_calories: Math.round(analysisResult.total_calories),
+      total_protein: Math.round(analysisResult.total_protein),
       image_description: analysisResult.comment ?? "",
     };
 

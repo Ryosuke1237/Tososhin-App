@@ -15,6 +15,8 @@ export async function POST(req: NextRequest) {
     // ── テキストモード（複数料理）：料理名リストからカロリーを一括計算 ──
     if (foodNames && Array.isArray(foodNames) && foodNames.length > 0) {
       const prompt = `以下の食事メニューのカロリーとタンパク質を分析してください。
+※重要：料理名に（中）、3合、大ジョッキなど量やサイズが含まれている場合は、それを考慮して計算してください。
+
 メニュー: ${foodNames.join('、')}
 
 以下のJSON形式で返してください。JSONのみを返し、コードブロックや説明文は不要です。
@@ -41,6 +43,9 @@ export async function POST(req: NextRequest) {
     // ── テキストモード（単品）：料理名からカロリーを計算 ──
     if (foodName) {
       const prompt = `「${foodName}」のカロリーとタンパク質を以下のJSON形式で返してください。
+※重要：（中）、3合、大ジョッキなど量やサイズが含まれている場合は、それを考慮して計算してください。
+例：生ビール（中）→約200kcal、日本酒3合→約555kcal、ハイボール（大ジョッキ）→約250kcal
+
 JSONのみを返し、コードブロックや説明文は不要です。
 
 { "calories": カロリー数値, "protein": タンパク質g数値 }`

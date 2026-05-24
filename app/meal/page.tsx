@@ -341,6 +341,10 @@ export default function MealPage() {
         {/* ── テキスト入力モード ── */}
         {inputMode === "text" && (
           <>
+            <p style={{ fontSize: "12px", color: "var(--gray-l)", marginBottom: "12px", fontStyle: "italic" }}>
+              💡 量やサイズを含めて入力すると、より正確なカロリー計算ができます。<br />
+              例：生ビール（中）、日本酒3合、ハイボール（大ジョッキ）、牛丼（並盛）
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
               {textFoods.map((food, idx) => (
                 <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -358,7 +362,7 @@ export default function MealPage() {
                         setTextFoods((prev) => [...prev, ""]);
                       }
                     }}
-                    placeholder={idx === 0 ? "例：牛丼ミニ" : "例：味噌汁"}
+                    placeholder={idx === 0 ? "例：生ビール（中）、日本酒3合" : "例：味噌汁、ハイボール（大）"}
                     style={{
                       flex: 1, padding: "10px 14px", background: "var(--dark)",
                       border: "1px solid var(--border)", borderRadius: "8px",
@@ -539,7 +543,7 @@ export default function MealPage() {
                   }
                   if (e.key === "Escape") { setIsAddingFood(false); setAddingFoodName(""); }
                 }}
-                placeholder="料理名を入力してEnter"
+                placeholder="例：生ビール（中）、日本酒3合、ハイボール（大）"
                 disabled={isAddingCalc}
                 style={{
                   flex: 1, padding: "10px 14px", background: "var(--dark)",

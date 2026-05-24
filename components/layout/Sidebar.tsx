@@ -6,8 +6,9 @@ import { mockUser } from "@/lib/mockData";
 
 const navItems = [
   { id: "dashboard", icon: "🏠", label: "ダッシュボード", badge: null,  href: "/"     },
-  { id: "meal",      icon: "🍽️", label: "食事ログ",       badge: null,  href: "/meal" },
-  { id: "chat",      icon: "💬", label: "高橋相談室",      badge: "24h", href: "/chat" },
+  { id: "meal",      icon: "🍽️", label: "食事ログ",         badge: null,  href: "/meal"     },
+  { id: "training",  icon: "🥊", label: "トレーニング記録", badge: null,  href: "/training" },
+  { id: "chat",      icon: "💬", label: "高橋相談室",       badge: "24h", href: "/chat"     },
   { id: "plan",      icon: "👑", label: "プラン",          badge: null,  href: "/plan" },
 ];
 

@@ -183,18 +183,22 @@ export default function MealPage() {
   };
 
   const handleDelete = async (id: string) => {
-    const supabase = getSupabase();
-    if (supabase) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: dbError } = await (supabase as any)
-        .from("meal_logs")
-        .delete()
-        .eq("id", id);
-      if (dbError) {
-        setError("削除に失敗しました: " + dbError.message);
+    try {
+      const res = await fetch("/api/save-meal", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError("削除に失敗しました: " + (json.error ?? res.statusText));
         setDeletingId(null);
         return;
       }
+    } catch (err) {
+      setError("削除に失敗しました: " + (err instanceof Error ? err.message : String(err)));
+      setDeletingId(null);
+      return;
     }
     setSavedMeals((prev) => prev.filter((m) => m.id !== id));
     setDeletingId(null);
@@ -203,6 +207,7 @@ export default function MealPage() {
   const handleSave = async () => {
     if (!analysisResult) return;
     setIsSaving(true);
+    setError(null);
 
     const foodsText = analysisResult.foods.map((f) => f.name).join("、");
     const newMealData = {
@@ -215,22 +220,26 @@ export default function MealPage() {
       image_description: analysisResult.comment ?? "",
     };
 
-    // Supabaseに保存
-    const supabase = getSupabase();
-    if (supabase && userId) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: dbError } = await (supabase as any)
-        .from("meal_logs")
-        .insert({ user_id: userId, date: today, ...newMealData })
-        .select()
-        .single();
-
-      if (dbError) {
-        setError("保存に失敗しました: " + dbError.message);
+    if (userId) {
+      // サーバーAPIルート経由で保存（iOS SafariのクロスオリジンPOSTブロック対策）
+      try {
+        const res = await fetch("/api/save-meal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, date: today, mealData: newMealData }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setError("保存に失敗しました: " + (json.error ?? res.statusText));
+          setIsSaving(false);
+          return;
+        }
+        if (json.data) setSavedMeals((prev) => [...prev, json.data]);
+      } catch (err) {
+        setError("保存に失敗しました: " + (err instanceof Error ? err.message : String(err)));
         setIsSaving(false);
         return;
       }
-      if (data) setSavedMeals((prev) => [...prev, data]);
     } else {
       // Supabase未設定時はローカル保存
       setSavedMeals((prev) => [
@@ -242,6 +251,7 @@ export default function MealPage() {
     setImagePreview(null);
     setImageBase64(null);
     setAnalysisResult(null);
+    setTextFoods([{ name: "", qty: 1 }]);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setIsSaving(false);
   };

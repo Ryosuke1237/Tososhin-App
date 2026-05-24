@@ -189,6 +189,8 @@ export default function MealPage() {
       foods: foodsText,
       total_calories: Math.round(analysisResult.total_calories),
       total_protein: Math.round(analysisResult.total_protein),
+      total_carbs: Math.round(analysisResult.total_carbs ?? 0),
+      total_fat: Math.round(analysisResult.total_fat ?? 0),
       image_description: analysisResult.comment ?? "",
     };
 

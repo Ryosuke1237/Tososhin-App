@@ -116,8 +116,42 @@ export type MealLog = {
   foods: string
   total_calories: number
   total_protein: number
+  total_carbs: number
+  total_fat: number
   image_description: string
   created_at: string
+}
+
+// ─── 今日の栄養素合計 ───────────────────────────────────────────
+export type TodayNutrition = {
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+}
+
+export async function getTodayNutrition(userId: string): Promise<TodayNutrition> {
+  const zero = { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  if (!supabase) return zero
+
+  const today = new Date().toISOString().split('T')[0]
+  const { data, error } = await supabase
+    .from('meal_logs')
+    .select('total_calories, total_protein, total_carbs, total_fat')
+    .eq('user_id', userId)
+    .eq('date', today)
+
+  if (error || !data || data.length === 0) return zero
+
+  return data.reduce(
+    (acc, row) => ({
+      calories: acc.calories + (row.total_calories ?? 0),
+      protein:  acc.protein  + (row.total_protein  ?? 0),
+      carbs:    acc.carbs    + (row.total_carbs    ?? 0),
+      fat:      acc.fat      + (row.total_fat      ?? 0),
+    }),
+    zero
+  )
 }
 
 // ─── 食事ログ取得 ───────────────────────────────────────────

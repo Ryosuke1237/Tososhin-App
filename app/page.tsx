@@ -1,4 +1,4 @@
-import { getProfile, getTodayRecord, getChatMessages, getScoreHistory } from "@/lib/db";
+import { getProfile, getTodayRecord, getChatMessages, getScoreHistory, getTodayNutrition } from "@/lib/db";
 import { mockKpi, mockProgress, mockChat, mockQuickReplies, getTodayQuote, getTodayLabel } from "@/lib/mockData";
 
 export default async function Dashboard() {
@@ -10,6 +10,7 @@ export default async function Dashboard() {
   const todayRecord = profile ? await getTodayRecord(profile.id) : null;
   const chatMessages = profile ? await getChatMessages(profile.id) : [];
   const scoreHistory = profile ? await getScoreHistory(profile.id) : [58, 63, 70, 67, 75, 78, 82];
+  const nutrition = profile ? await getTodayNutrition(profile.id) : { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
   // ── ユーザー情報（DBまたはモック）──
   const user = profile
@@ -32,16 +33,13 @@ export default async function Dashboard() {
       ]
     : mockKpi;
 
-  // ── 進捗（DBまたはモック）──
-  const progress = todayRecord
-    ? [
-        { icon: "🍽️", label: "食事記録",           value: `${todayRecord.meal_count} / 3食`,              pct: Math.round(todayRecord.meal_count / 3 * 100),     color: "linear-gradient(90deg,#880000,#ff2020)" },
-        { icon: "💪", label: "タンパク質充足",     value: `${Math.round(todayRecord.protein/160*100)}%`,  pct: Math.round(todayRecord.protein / 160 * 100),       color: "linear-gradient(90deg,#8a7030,#c8a84b)" },
-        { icon: "💧", label: "水分補給",           value: `${todayRecord.water_liters}L / 2.5L`,          pct: Math.round(todayRecord.water_liters / 2.5 * 100), color: "linear-gradient(90deg,#205080,#3a8fd1)" },
-        { icon: "🏋️", label: "今週のトレーニング", value: `${todayRecord.training_count} / 3回`,          pct: Math.round(todayRecord.training_count / 3 * 100), color: "linear-gradient(90deg,#880000,#ff2020)" },
-        { icon: "🛌", label: "睡眠時間",           value: `${todayRecord.sleep_hours}h / 7h`,             pct: Math.round(todayRecord.sleep_hours / 7 * 100),    color: "linear-gradient(90deg,#1a7040,#2ecc71)" },
-      ]
-    : mockProgress;
+  // ── 栄養進捗（食事ログから集計）──
+  const nutritionProgress = [
+    { icon: "🔥", label: "総摂取カロリー", value: `${nutrition.calories.toLocaleString()} / 2,200kcal`, pct: Math.min(Math.round(nutrition.calories / 2200 * 100), 100), color: "linear-gradient(90deg,#880000,#ff2020)" },
+    { icon: "💪", label: "タンパク質（蛋）", value: `${nutrition.protein}g / 160g`,   pct: Math.min(Math.round(nutrition.protein / 160 * 100), 100),  color: "linear-gradient(90deg,#1a4a8a,#3a8fd1)" },
+    { icon: "🌾", label: "炭水化物（糖）",  value: `${nutrition.carbs}g / 250g`,     pct: Math.min(Math.round(nutrition.carbs / 250 * 100), 100),    color: "linear-gradient(90deg,#555,#ffffff)" },
+    { icon: "🧈", label: "脂質（脂）",      value: `${nutrition.fat}g / 70g`,        pct: Math.min(Math.round(nutrition.fat / 70 * 100), 100),       color: "linear-gradient(90deg,#8a6a00,#fbbf24)" },
+  ];
 
   // ── チャット（DBまたはモック）──
   const chat = chatMessages.length > 0
@@ -109,16 +107,16 @@ export default async function Dashboard() {
       {/* ── 2カラム ── */}
       <div className="two-col">
 
-        {/* 左：達成進捗 */}
+        {/* 左：今日の栄養摂取 */}
         <div className="card">
           <div className="card-header">
-            <span className="card-title">今日の達成進捗</span>
+            <span className="card-title">今日の栄養摂取</span>
             <span className="card-sub">
               {profile ? "Supabase連携中 ✅" : "モックデータ"}
             </span>
           </div>
           <div className="progress-list">
-            {progress.map((item, i) => (
+            {nutritionProgress.map((item, i) => (
               <div key={i} className="progress-item">
                 <div className="progress-meta">
                   <span className="progress-label">
@@ -128,7 +126,7 @@ export default async function Dashboard() {
                   <span className="progress-val">{item.value}</span>
                 </div>
                 <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${Math.min(item.pct, 100)}%`, background: item.color }} />
+                  <div className="progress-fill" style={{ width: `${item.pct}%`, background: item.color }} />
                 </div>
               </div>
             ))}

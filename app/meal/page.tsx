@@ -53,6 +53,8 @@ export default function MealPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [inputMode, setInputMode] = useState<"photo" | "text">("photo");
+  const [textFoods, setTextFoods] = useState<string[]>([""]);
   const [mealType, setMealType] = useState("食事");
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -139,6 +141,27 @@ export default function MealPage() {
       setAnalysisResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "解析中にエラーが発生しました");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleTextAnalyze = async () => {
+    const validFoods = textFoods.map((f) => f.trim()).filter(Boolean);
+    if (validFoods.length === 0) return;
+    setIsAnalyzing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/analyze-food", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ foodNames: validFoods }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "計算に失敗しました");
+      setAnalysisResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "計算中にエラーが発生しました");
     } finally {
       setIsAnalyzing(false);
     }
@@ -231,10 +254,29 @@ export default function MealPage() {
         </div>
       )}
 
-      {/* ── 写真アップロード ── */}
+      {/* ── 食事記録入力 ── */}
       <div className="card" style={{ padding: "24px" }}>
-        <div className="card-header" style={{ marginBottom: "16px" }}>
-          <span className="card-title">📷 食事写真をアップロード</span>
+
+        {/* タブ切り替え */}
+        <div style={{ display: "flex", gap: "4px", marginBottom: "20px", background: "var(--dark)", borderRadius: "10px", padding: "4px" }}>
+          {[
+            { mode: "photo" as const, label: "📷 写真で解析" },
+            { mode: "text" as const,  label: "⌨️ 料理名を入力" },
+          ].map(({ mode, label }) => (
+            <button
+              key={mode}
+              onClick={() => { setInputMode(mode); setError(null); setAnalysisResult(null); }}
+              style={{
+                flex: 1, padding: "10px", borderRadius: "8px",
+                border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 700,
+                background: inputMode === mode ? "var(--red)" : "transparent",
+                color: inputMode === mode ? "var(--white)" : "var(--gray)",
+                transition: "all 0.2s",
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* 食事タイプ選択 */}
@@ -244,15 +286,11 @@ export default function MealPage() {
               key={type}
               onClick={() => setMealType(type)}
               style={{
-                padding: "6px 16px",
-                borderRadius: "20px",
+                padding: "6px 16px", borderRadius: "20px",
                 border: `1px solid ${mealType === type ? "var(--red)" : "var(--border)"}`,
                 background: mealType === type ? "var(--red)" : "transparent",
-                color: "var(--white)",
-                fontSize: "12px",
-                fontWeight: 700,
-                cursor: "pointer",
-                transition: "all 0.2s",
+                color: "var(--white)", fontSize: "12px", fontWeight: 700,
+                cursor: "pointer", transition: "all 0.2s",
               }}
             >
               {type}
@@ -260,59 +298,114 @@ export default function MealPage() {
           ))}
         </div>
 
-        {/* ドロップゾーン */}
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          style={{
-            border: `2px dashed ${isDragging ? "var(--red)" : "var(--border)"}`,
-            borderRadius: "12px",
-            padding: "32px 16px",
-            textAlign: "center",
-            cursor: "pointer",
-            background: isDragging ? "rgba(204,0,0,0.05)" : "transparent",
-            transition: "all 0.2s",
-            minHeight: "160px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-          }}
-        >
-          {imagePreview ? (
-            <img
-              src={imagePreview}
-              alt="食事プレビュー"
-              style={{ maxHeight: "240px", maxWidth: "100%", borderRadius: "8px", objectFit: "contain" }}
-            />
-          ) : (
-            <>
-              <span style={{ fontSize: "40px" }}>📷</span>
-              <p style={{ color: "var(--gray-l)", fontSize: "14px", fontWeight: 600 }}>
-                クリックまたはドラッグ＆ドロップ
-              </p>
-              <p style={{ color: "var(--gray)", fontSize: "11px" }}>JPG / PNG / HEIC 対応</p>
-            </>
-          )}
-        </div>
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
+        {/* ── 写真モード ── */}
+        {inputMode === "photo" && (
+          <>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              style={{
+                border: `2px dashed ${isDragging ? "var(--red)" : "var(--border)"}`,
+                borderRadius: "12px", padding: "32px 16px", textAlign: "center",
+                cursor: "pointer", background: isDragging ? "rgba(204,0,0,0.05)" : "transparent",
+                transition: "all 0.2s", minHeight: "160px", display: "flex",
+                flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px",
+              }}
+            >
+              {imagePreview ? (
+                <img src={imagePreview} alt="食事プレビュー"
+                  style={{ maxHeight: "240px", maxWidth: "100%", borderRadius: "8px", objectFit: "contain" }} />
+              ) : (
+                <>
+                  <span style={{ fontSize: "40px" }}>📷</span>
+                  <p style={{ color: "var(--gray-l)", fontSize: "14px", fontWeight: 600 }}>クリックまたはドラッグ＆ドロップ</p>
+                  <p style={{ color: "var(--gray)", fontSize: "11px" }}>JPG / PNG / HEIC 対応</p>
+                </>
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
+            {imagePreview && !analysisResult && (
+              <button className="btn-primary" onClick={handleAnalyze} disabled={isAnalyzing}
+                style={{ marginTop: "16px", width: "100%", opacity: isAnalyzing ? 0.7 : 1 }}>
+                {isAnalyzing ? "🤖 AI解析中..." : "🤖 AIでカロリーを解析する"}
+              </button>
+            )}
+          </>
+        )}
+
+        {/* ── テキスト入力モード ── */}
+        {inputMode === "text" && (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+              {textFoods.map((food, idx) => (
+                <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <input
+                    type="text"
+                    value={food}
+                    onChange={(e) => {
+                      const updated = [...textFoods];
+                      updated[idx] = e.target.value;
+                      setTextFoods(updated);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setTextFoods((prev) => [...prev, ""]);
+                      }
+                    }}
+                    placeholder={idx === 0 ? "例：牛丼ミニ" : "例：味噌汁"}
+                    style={{
+                      flex: 1, padding: "10px 14px", background: "var(--dark)",
+                      border: "1px solid var(--border)", borderRadius: "8px",
+                      color: "var(--white)", fontSize: "14px", fontWeight: 600, outline: "none",
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = "var(--red)"; }}
+                    onBlur={(e) => { e.target.style.borderColor = "var(--border)"; }}
+                  />
+                  {textFoods.length > 1 && (
+                    <button
+                      onClick={() => setTextFoods((prev) => prev.filter((_, i) => i !== idx))}
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "50%", border: "none",
+                        background: "var(--border)", color: "var(--gray)", cursor: "pointer",
+                        fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {/* 料理を追加ボタン */}
+              <button
+                onClick={() => setTextFoods((prev) => [...prev, ""])}
+                style={{
+                  padding: "10px", borderRadius: "8px", border: `1px dashed var(--border)`,
+                  background: "transparent", color: "var(--gray)", fontSize: "13px",
+                  fontWeight: 700, cursor: "pointer", textAlign: "center",
+                }}
+              >
+                ＋ 料理を追加
+              </button>
+            </div>
+
+            <button
+              className="btn-primary"
+              onClick={handleTextAnalyze}
+              disabled={isAnalyzing || textFoods.every((f) => !f.trim())}
+              style={{ width: "100%", opacity: (isAnalyzing || textFoods.every((f) => !f.trim())) ? 0.6 : 1 }}
+            >
+              {isAnalyzing ? "🤖 計算中..." : "🤖 AIでカロリーを計算する"}
+            </button>
+          </>
+        )}
 
         {error && (
           <p style={{ color: "var(--red-b)", fontSize: "12px", marginTop: "8px" }}>⚠️ {error}</p>
-        )}
-
-        {imagePreview && !analysisResult && (
-          <button
-            className="btn-primary"
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            style={{ marginTop: "16px", width: "100%", opacity: isAnalyzing ? 0.7 : 1 }}
-          >
-            {isAnalyzing ? "🤖 AI解析中..." : "🤖 AIでカロリーを解析する"}
-          </button>
         )}
       </div>
 
@@ -431,7 +524,13 @@ export default function MealPage() {
               {isSaving ? "保存中..." : "💾 Supabaseに保存する"}
             </button>
             <button className="btn-secondary"
-              onClick={() => { setAnalysisResult(null); setImagePreview(null); setImageBase64(null); }}
+              onClick={() => {
+                setAnalysisResult(null);
+                setImagePreview(null);
+                setImageBase64(null);
+                setTextFoods([""]);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
               style={{ padding: "0 16px" }}>
               やり直す
             </button>

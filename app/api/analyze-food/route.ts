@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai'
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageBase64, mimeType, foodName } = await req.json()
+    const { imageBase64, mimeType, foodName, foodNames } = await req.json()
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
@@ -12,7 +12,33 @@ export async function POST(req: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey })
 
-    // ── テキストモード：料理名からカロリーを計算 ──
+    // ── テキストモード（複数料理）：料理名リストからカロリーを一括計算 ──
+    if (foodNames && Array.isArray(foodNames) && foodNames.length > 0) {
+      const prompt = `以下の食事メニューのカロリーとタンパク質を分析してください。
+メニュー: ${foodNames.join('、')}
+
+以下のJSON形式で返してください。JSONのみを返し、コードブロックや説明文は不要です。
+
+{
+  "foods": [
+    { "name": "料理名", "calories": カロリー数値, "protein": タンパク質g数値 }
+  ],
+  "total_calories": 合計カロリー数値,
+  "total_protein": 合計タンパク質g数値,
+  "comment": "一言コメント（日本語）"
+}`
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [{ parts: [{ text: prompt }] }],
+      })
+      const text = response.text?.trim() ?? ''
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) return NextResponse.json({ error: 'パース失敗' }, { status: 500 })
+      return NextResponse.json(JSON.parse(jsonMatch[0]))
+    }
+
+    // ── テキストモード（単品）：料理名からカロリーを計算 ──
     if (foodName) {
       const prompt = `「${foodName}」のカロリーとタンパク質を以下のJSON形式で返してください。
 JSONのみを返し、コードブロックや説明文は不要です。

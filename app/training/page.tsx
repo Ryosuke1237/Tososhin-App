@@ -44,16 +44,22 @@ export default function TrainingPage() {
   useEffect(() => {
     const init = async () => {
       const supabase = getSupabase();
-      if (!supabase) return;
+      if (!supabase) {
+        setError("Supabase環境変数が設定されていません。");
+        return;
+      }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profile } = await (supabase as any)
+      const { data: profile, error: profileError } = await (supabase as any)
         .from("profiles")
         .select("id")
         .limit(1)
         .single();
 
-      if (!profile) return;
+      if (profileError || !profile) {
+        console.warn("profiles取得失敗:", profileError?.message);
+        return;
+      }
       setUserId(profile.id);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,12 +75,19 @@ export default function TrainingPage() {
   }, []);
 
   const processFile = (file: File) => {
-    if (!file.type.startsWith("video/")) {
+    // スマホでは file.type が空になることがあるため、拡張子でも判定
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const videoExts = ["mp4", "mov", "avi", "mkv", "webm", "m4v", "3gp", "hevc", "ts"];
+    const isVideo =
+      file.type.startsWith("video/") ||
+      file.type === "" ||                 // iOS Safari では type が空になる場合あり
+      videoExts.includes(ext);
+    if (!isVideo) {
       setError("動画ファイルを選択してください");
       return;
     }
-    if (file.size > 200 * 1024 * 1024) {
-      setError("ファイルサイズは200MB以下にしてください");
+    if (file.size > 500 * 1024 * 1024) {
+      setError("ファイルサイズは500MB以下にしてください");
       return;
     }
     setError(null);
@@ -95,13 +108,20 @@ export default function TrainingPage() {
   }, []);
 
   const handleUpload = async () => {
-    if (!videoFile || !userId) return;
+    if (!videoFile) return;
+
+    // userId が null の場合はエラーを表示（無音で終わらせない）
+    if (!userId) {
+      setError("Supabaseに接続できていません。ページを再読み込みしてください。");
+      return;
+    }
+
     setIsUploading(true);
     setError(null);
 
     try {
       const supabase = getSupabase();
-      if (!supabase) throw new Error("Supabase未接続");
+      if (!supabase) throw new Error("Supabase未接続: 環境変数を確認してください");
 
       const ext = videoFile.name.split(".").pop();
       const fileName = `${userId}/${Date.now()}.${ext}`;
@@ -113,7 +133,13 @@ export default function TrainingPage() {
         .from("training-videos")
         .upload(fileName, videoFile, { cacheControl: "3600", upsert: false });
 
-      if (storageError) throw new Error(storageError.message);
+      if (storageError) {
+        // Storage ポリシー未設定の場合に分かりやすいメッセージを出す
+        const msg = storageError.message.includes("row-level") || storageError.message.includes("policy") || storageError.message.includes("Unauthorized")
+          ? "アップロード権限がありません。Supabase Storageのポリシー設定を確認してください。"
+          : `アップロードエラー: ${storageError.message}`;
+        throw new Error(msg);
+      }
 
       // 公開URLを取得
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -260,7 +286,17 @@ export default function TrainingPage() {
         <input ref={fileInputRef} type="file" accept="video/*" onChange={handleFileChange} style={{ display: "none" }} />
 
         {error && (
-          <p style={{ color: "var(--red-b)", fontSize: "12px", marginTop: "8px" }}>⚠️ {error}</p>
+          <div style={{
+            marginTop: "12px",
+            padding: "12px 14px",
+            background: "rgba(204,0,0,0.1)",
+            border: "1px solid rgba(204,0,0,0.4)",
+            borderRadius: "8px",
+          }}>
+            <p style={{ color: "var(--red-b)", fontSize: "13px", fontWeight: 700, lineHeight: 1.5 }}>
+              ⚠️ {error}
+            </p>
+          </div>
         )}
 
         {videoFile && (

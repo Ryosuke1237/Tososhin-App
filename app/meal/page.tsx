@@ -370,10 +370,7 @@ export default function MealPage() {
                       setTextFoods(updated);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        setTextFoods((prev) => [...prev, { name: "", qty: 1 }]);
-                      }
+                      if (e.key === "Enter") e.preventDefault();
                     }}
                     placeholder={idx === 0 ? "例：焼き鳥モモ" : "例：ハイボール"}
                     style={{

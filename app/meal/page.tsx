@@ -50,6 +50,9 @@ export default function MealPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [recalculating, setRecalculating] = useState<boolean[]>([]);
+  const [isAddingFood, setIsAddingFood] = useState(false);
+  const [addingFoodName, setAddingFoodName] = useState("");
+  const [isAddingCalc, setIsAddingCalc] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -499,6 +502,80 @@ export default function MealPage() {
               </div>
             ))}
           </div>
+
+          {/* ── 料理を追加 ── */}
+          {isAddingFood ? (
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px", alignItems: "center" }}>
+              <input
+                autoFocus
+                type="text"
+                value={addingFoodName}
+                onChange={(e) => setAddingFoodName(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    const name = addingFoodName.trim();
+                    if (!name || !analysisResult) return;
+                    setIsAddingCalc(true);
+                    try {
+                      const res = await fetch("/api/analyze-food", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ foodName: name }),
+                      });
+                      const data = await res.json();
+                      const newFood = { name, calories: data.calories ?? 0, protein: data.protein ?? 0 };
+                      const updatedFoods = [...analysisResult.foods, newFood];
+                      setAnalysisResult({
+                        ...analysisResult,
+                        foods: updatedFoods,
+                        total_calories: updatedFoods.reduce((s, f) => s + f.calories, 0),
+                        total_protein: updatedFoods.reduce((s, f) => s + f.protein, 0),
+                      });
+                    } finally {
+                      setIsAddingCalc(false);
+                      setAddingFoodName("");
+                      setIsAddingFood(false);
+                    }
+                  }
+                  if (e.key === "Escape") { setIsAddingFood(false); setAddingFoodName(""); }
+                }}
+                placeholder="料理名を入力してEnter"
+                disabled={isAddingCalc}
+                style={{
+                  flex: 1, padding: "10px 14px", background: "var(--dark)",
+                  border: "1px solid var(--red)", borderRadius: "8px",
+                  color: "var(--white)", fontSize: "14px", fontWeight: 600, outline: "none",
+                  opacity: isAddingCalc ? 0.6 : 1,
+                }}
+              />
+              {isAddingCalc ? (
+                <span style={{ color: "var(--gray-l)", fontSize: "12px", whiteSpace: "nowrap" }}>計算中...</span>
+              ) : (
+                <button
+                  onClick={() => { setIsAddingFood(false); setAddingFoodName(""); }}
+                  style={{
+                    padding: "10px 14px", borderRadius: "8px", border: "1px solid var(--border)",
+                    background: "transparent", color: "var(--gray)", cursor: "pointer", fontSize: "12px",
+                  }}
+                >
+                  キャンセル
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => { setIsAddingFood(true); setAddingFoodName(""); }}
+              style={{
+                width: "100%", padding: "10px", marginBottom: "12px",
+                borderRadius: "8px", border: "1px dashed var(--border)",
+                background: "transparent", color: "var(--gray-l)",
+                fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+              }}
+            >
+              ＋ 料理を追加
+            </button>
+          )}
 
           <div style={{
             display: "flex", justifyContent: "space-between", padding: "14px 16px",

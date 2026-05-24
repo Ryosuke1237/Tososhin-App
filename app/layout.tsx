@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar      from "@/components/layout/Sidebar";
 import MobileHeader from "@/components/layout/MobileHeader";
+import BottomNav    from "@/components/layout/BottomNav";
 
 export const metadata: Metadata = {
   title: "闘争心 — CONDITION SYSTEM",
@@ -13,10 +13,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja">
       <body>
         <MobileHeader />
-        <div className="app-layout">
-          <Sidebar />
-          <main className="main-content">{children}</main>
-        </div>
+        <main className="main-content">{children}</main>
+        <BottomNav />
       </body>
     </html>
   );

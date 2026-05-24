@@ -39,6 +39,8 @@ type SavedMeal = {
   foods: string;
   total_calories: number;
   total_protein: number;
+  total_carbs: number;
+  total_fat: number;
 };
 
 export default function MealPage() {
@@ -226,7 +228,9 @@ export default function MealPage() {
   };
 
   const totalCaloriesToday = savedMeals.reduce((s, m) => s + m.total_calories, 0);
-  const totalProteinToday = savedMeals.reduce((s, m) => s + m.total_protein, 0);
+  const totalProteinToday  = savedMeals.reduce((s, m) => s + m.total_protein, 0);
+  const totalCarbsToday    = savedMeals.reduce((s, m) => s + (m.total_carbs ?? 0), 0);
+  const totalFatToday      = savedMeals.reduce((s, m) => s + (m.total_fat ?? 0), 0);
 
   return (
     <div className="page">
@@ -253,17 +257,35 @@ export default function MealPage() {
               <span className="kpi-value red">{totalCaloriesToday.toLocaleString()}</span>
               <span className="kpi-unit">kcal</span>
             </div>
-            <div className="kpi-label">今日の摂取カロリー</div>
+            <div className="kpi-label">総摂取カロリー</div>
             <div className="kpi-trend trend-neutral">目標 2,200kcal</div>
           </div>
           <div className="kpi-card">
             <div className="kpi-icon">💪</div>
             <div>
-              <span className="kpi-value">{totalProteinToday}</span>
+              <span className="kpi-value" style={{ color: "#60a5fa" }}>{totalProteinToday}</span>
               <span className="kpi-unit">g</span>
             </div>
-            <div className="kpi-label">タンパク質</div>
-            <div className="kpi-trend trend-up">↑ 目標比 {Math.round(totalProteinToday / 160 * 100)}%</div>
+            <div className="kpi-label">蛋（タンパク質）</div>
+            <div className="kpi-trend trend-up">目標比 {Math.round(totalProteinToday / 160 * 100)}%</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-icon">🌾</div>
+            <div>
+              <span className="kpi-value" style={{ color: "#ffffff" }}>{totalCarbsToday}</span>
+              <span className="kpi-unit">g</span>
+            </div>
+            <div className="kpi-label">糖（炭水化物）</div>
+            <div className="kpi-trend trend-neutral">目標比 {Math.round(totalCarbsToday / 250 * 100)}%</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-icon">🧈</div>
+            <div>
+              <span className="kpi-value" style={{ color: "#fbbf24" }}>{totalFatToday}</span>
+              <span className="kpi-unit">g</span>
+            </div>
+            <div className="kpi-label">脂（脂質）</div>
+            <div className="kpi-trend trend-neutral">目標比 {Math.round(totalFatToday / 70 * 100)}%</div>
           </div>
         </div>
       )}
@@ -733,10 +755,14 @@ export default function MealPage() {
                   <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--white)" }}>{meal.foods}</p>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "16px" }}>
+                  <div style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "16px", marginBottom: "4px" }}>
                     {meal.total_calories}<span style={{ fontSize: "10px", fontWeight: 600 }}>kcal</span>
                   </div>
-                  <div style={{ color: "var(--gray)", fontSize: "11px" }}>P: {meal.total_protein}g</div>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                    <span style={{ color: "#60a5fa", fontSize: "11px" }}>蛋:{meal.total_protein}g</span>
+                    <span style={{ color: "#ffffff", fontSize: "11px" }}>糖:{meal.total_carbs ?? 0}g</span>
+                    <span style={{ color: "#fbbf24", fontSize: "11px" }}>脂:{meal.total_fat ?? 0}g</span>
+                  </div>
                 </div>
               </div>
             ))}

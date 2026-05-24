@@ -678,7 +678,7 @@ export default function MealPage() {
           <div style={{ display: "flex", gap: "10px" }}>
             <button className="btn-primary" onClick={handleSave} disabled={isSaving}
               style={{ flex: 1, opacity: isSaving ? 0.7 : 1 }}>
-              {isSaving ? "保存中..." : "💾 Supabaseに保存する"}
+              {isSaving ? "記録中..." : "📝 記録する"}
             </button>
             <button className="btn-secondary"
               onClick={() => {

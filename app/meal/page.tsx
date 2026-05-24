@@ -47,6 +47,8 @@ export default function MealPage() {
   const [imageMimeType, setImageMimeType] = useState<string>("image/jpeg");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -64,7 +66,8 @@ export default function MealPage() {
       }
 
       // プロフィール取得
-      const { data: profile, error: profileError } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: profile, error: profileError } = await (supabase as any)
         .from("profiles")
         .select("id")
         .limit(1)
@@ -77,7 +80,8 @@ export default function MealPage() {
       setUserId(profile.id);
 
       // 今日の食事記録を取得
-      const { data: logs } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: logs } = await (supabase as any)
         .from("meal_logs")
         .select("*")
         .eq("user_id", profile.id)
@@ -155,7 +159,8 @@ export default function MealPage() {
     // Supabaseに保存
     const supabase = getSupabase();
     if (supabase && userId) {
-      const { data, error: dbError } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error: dbError } = await (supabase as any)
         .from("meal_logs")
         .insert({ user_id: userId, date: today, ...newMealData })
         .select()
@@ -325,8 +330,45 @@ export default function MealPage() {
                 padding: "10px 14px", background: "var(--dark)", borderRadius: "8px",
                 borderLeft: "3px solid var(--red)",
               }}>
-                <span style={{ fontSize: "14px", fontWeight: 700 }}>{food.name}</span>
-                <div style={{ textAlign: "right" }}>
+                {/* 料理名：クリックで編集 */}
+                {editingIndex === i ? (
+                  <input
+                    autoFocus
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onBlur={() => {
+                      if (editingName.trim()) {
+                        const updated = [...analysisResult.foods];
+                        updated[i] = { ...updated[i], name: editingName.trim() };
+                        setAnalysisResult({ ...analysisResult, foods: updated });
+                      }
+                      setEditingIndex(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      if (e.key === "Escape") { setEditingIndex(null); }
+                    }}
+                    style={{
+                      background: "var(--border)", border: "1px solid var(--red)",
+                      borderRadius: "6px", color: "var(--white)", fontSize: "14px",
+                      fontWeight: 700, padding: "4px 8px", outline: "none", flex: 1,
+                    }}
+                  />
+                ) : (
+                  <button
+                    onClick={() => { setEditingIndex(i); setEditingName(food.name); }}
+                    title="クリックして編集"
+                    style={{
+                      fontSize: "14px", fontWeight: 700, background: "none",
+                      border: "none", color: "var(--white)", cursor: "pointer",
+                      textAlign: "left", padding: "2px 4px", borderRadius: "4px",
+                      textDecoration: "underline dotted var(--gray)",
+                    }}
+                  >
+                    ✏️ {food.name}
+                  </button>
+                )}
+                <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "8px" }}>
                   <span style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "15px" }}>{food.calories}kcal</span>
                   <span style={{ color: "var(--gray)", fontSize: "11px", marginLeft: "8px" }}>P: {food.protein}g</span>
                 </div>

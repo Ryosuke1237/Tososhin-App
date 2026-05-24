@@ -538,7 +538,7 @@ export default function MealPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                       <span style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "15px" }}>{food.calories}kcal</span>
                       <span style={{ color: "#60a5fa", fontSize: "11px" }}>蛋:{food.protein}g</span>
-                      <span style={{ color: "var(--white)", fontSize: "11px" }}>糖:{food.carbs ?? 0}g</span>
+                      <span style={{ color: "#ffffff", fontSize: "11px" }}>糖:{food.carbs ?? 0}g</span>
                       <span style={{ color: "#fbbf24", fontSize: "11px" }}>脂:{food.fat ?? 0}g</span>
                     </div>
                   )}
@@ -664,7 +664,7 @@ export default function MealPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" }}>
               <span style={{ color: "var(--red-b)", fontWeight: 900, fontSize: "18px" }}>{analysisResult.total_calories}kcal</span>
               <span style={{ color: "#60a5fa", fontSize: "12px" }}>蛋: {analysisResult.total_protein}g</span>
-              <span style={{ color: "var(--white)", fontSize: "12px" }}>糖: {analysisResult.total_carbs ?? 0}g</span>
+              <span style={{ color: "#ffffff", fontSize: "12px" }}>糖: {analysisResult.total_carbs ?? 0}g</span>
               <span style={{ color: "#fbbf24", fontSize: "12px" }}>脂: {analysisResult.total_fat ?? 0}g</span>
             </div>
           </div>

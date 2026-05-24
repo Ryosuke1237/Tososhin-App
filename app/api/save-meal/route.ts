@@ -41,10 +41,24 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = createClient(url, key);
-    const { error } = await supabase.from("meal_logs").delete().eq("id", id);
+
+    // .select() を付けることで「実際に削除された行数」を確認できる
+    const { data: deleted, error } = await supabase
+      .from("meal_logs")
+      .delete()
+      .eq("id", id)
+      .select();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    // 0件削除（RLSブロックなど）の場合もエラーを返す
+    if (!deleted || deleted.length === 0) {
+      return NextResponse.json(
+        { error: "削除できませんでした。Supabaseのポリシー設定を確認してください。" },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({ success: true });

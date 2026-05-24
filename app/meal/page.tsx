@@ -19,12 +19,16 @@ type FoodItem = {
   name: string;
   calories: number;
   protein: number;
+  carbs: number;
+  fat: number;
 };
 
 type AnalysisResult = {
   foods: FoodItem[];
   total_calories: number;
   total_protein: number;
+  total_carbs: number;
+  total_fat: number;
   comment: string;
 };
 
@@ -486,10 +490,14 @@ export default function MealPage() {
                           name: newName,
                           calories: data.calories ?? food.calories,
                           protein: data.protein ?? food.protein,
+                          carbs: data.carbs ?? food.carbs ?? 0,
+                          fat: data.fat ?? food.fat ?? 0,
                         };
                         const newTotal = updated.reduce((s, f) => s + f.calories, 0);
                         const newProtein = updated.reduce((s, f) => s + f.protein, 0);
-                        setAnalysisResult({ ...analysisResult, foods: updated, total_calories: newTotal, total_protein: newProtein });
+                        const newCarbs = updated.reduce((s, f) => s + (f.carbs ?? 0), 0);
+                        const newFat = updated.reduce((s, f) => s + (f.fat ?? 0), 0);
+                        setAnalysisResult({ ...analysisResult, foods: updated, total_calories: newTotal, total_protein: newProtein, total_carbs: newCarbs, total_fat: newFat });
                       } catch {
                         // エラー時は名前だけ更新
                         const updated = [...analysisResult.foods];
@@ -527,10 +535,12 @@ export default function MealPage() {
                   {recalculating[i] ? (
                     <span style={{ color: "var(--gray-l)", fontWeight: 700, fontSize: "13px" }}>計算中...</span>
                   ) : (
-                    <>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                       <span style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "15px" }}>{food.calories}kcal</span>
-                      <span style={{ color: "var(--gray)", fontSize: "11px", marginLeft: "8px" }}>P: {food.protein}g</span>
-                    </>
+                      <span style={{ color: "var(--gray)", fontSize: "11px" }}>P:{food.protein}g</span>
+                      <span style={{ color: "#60a5fa", fontSize: "11px" }}>C:{food.carbs ?? 0}g</span>
+                      <span style={{ color: "#fbbf24", fontSize: "11px" }}>F:{food.fat ?? 0}g</span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -594,13 +604,15 @@ export default function MealPage() {
                             body: JSON.stringify({ foodName: foodText }),
                           });
                           const data = await res.json();
-                          const newFood = { name: foodText, calories: data.calories ?? 0, protein: data.protein ?? 0 };
+                          const newFood = { name: foodText, calories: data.calories ?? 0, protein: data.protein ?? 0, carbs: data.carbs ?? 0, fat: data.fat ?? 0 };
                           const updatedFoods = [...analysisResult.foods, newFood];
                           setAnalysisResult({
                             ...analysisResult,
                             foods: updatedFoods,
                             total_calories: updatedFoods.reduce((s, f) => s + f.calories, 0),
                             total_protein: updatedFoods.reduce((s, f) => s + f.protein, 0),
+                            total_carbs: updatedFoods.reduce((s, f) => s + (f.carbs ?? 0), 0),
+                            total_fat: updatedFoods.reduce((s, f) => s + (f.fat ?? 0), 0),
                           });
                         } finally {
                           setIsAddingCalc(false);
@@ -649,9 +661,11 @@ export default function MealPage() {
             border: "1px solid rgba(204,0,0,0.3)", marginBottom: "12px",
           }}>
             <span style={{ fontWeight: 800, fontSize: "14px" }}>合計</span>
-            <div style={{ textAlign: "right" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" }}>
               <span style={{ color: "var(--red-b)", fontWeight: 900, fontSize: "18px" }}>{analysisResult.total_calories}kcal</span>
-              <span style={{ color: "var(--gray-l)", fontSize: "12px", marginLeft: "10px" }}>タンパク質 {analysisResult.total_protein}g</span>
+              <span style={{ color: "var(--gray-l)", fontSize: "12px" }}>P: {analysisResult.total_protein}g</span>
+              <span style={{ color: "#60a5fa", fontSize: "12px" }}>C: {analysisResult.total_carbs ?? 0}g</span>
+              <span style={{ color: "#fbbf24", fontSize: "12px" }}>F: {analysisResult.total_fat ?? 0}g</span>
             </div>
           </div>
 

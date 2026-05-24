@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     // ── テキストモード（複数料理）：料理名リストからカロリーを一括計算 ──
     if (foodNames && Array.isArray(foodNames) && foodNames.length > 0) {
-      const prompt = `以下の食事メニューのカロリーとタンパク質を分析してください。
+      const prompt = `以下の食事メニューの栄養成分を分析してください。
 ※重要：料理名に（中）、3合、大ジョッキなど量やサイズが含まれている場合は、それを考慮して計算してください。
 
 メニュー: ${foodNames.join('、')}
@@ -23,10 +23,12 @@ export async function POST(req: NextRequest) {
 
 {
   "foods": [
-    { "name": "料理名", "calories": カロリー数値, "protein": タンパク質g数値 }
+    { "name": "料理名", "calories": カロリー数値, "protein": タンパク質g数値, "carbs": 炭水化物g数値, "fat": 脂質g数値 }
   ],
   "total_calories": 合計カロリー数値,
   "total_protein": 合計タンパク質g数値,
+  "total_carbs": 合計炭水化物g数値,
+  "total_fat": 合計脂質g数値,
   "comment": "一言コメント（日本語）"
 }`
 
@@ -42,13 +44,12 @@ export async function POST(req: NextRequest) {
 
     // ── テキストモード（単品）：料理名からカロリーを計算 ──
     if (foodName) {
-      const prompt = `「${foodName}」のカロリーとタンパク質を以下のJSON形式で返してください。
+      const prompt = `「${foodName}」の栄養成分を以下のJSON形式で返してください。
 ※重要：（中）、3合、大ジョッキなど量やサイズが含まれている場合は、それを考慮して計算してください。
-例：生ビール（中）→約200kcal、日本酒3合→約555kcal、ハイボール（大ジョッキ）→約250kcal
 
 JSONのみを返し、コードブロックや説明文は不要です。
 
-{ "calories": カロリー数値, "protein": タンパク質g数値 }`
+{ "calories": カロリー数値, "protein": タンパク質g数値, "carbs": 炭水化物g数値, "fat": 脂質g数値 }`
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -66,10 +67,12 @@ JSONのみを返し、コードブロックや説明文は不要です。
 
 {
   "foods": [
-    { "name": "料理名", "calories": カロリー数値, "protein": タンパク質g数値 }
+    { "name": "料理名", "calories": カロリー数値, "protein": タンパク質g数値, "carbs": 炭水化物g数値, "fat": 脂質g数値 }
   ],
   "total_calories": 合計カロリー数値,
   "total_protein": 合計タンパク質g数値,
+  "total_carbs": 合計炭水化物g数値,
+  "total_fat": 合計脂質g数値,
   "comment": "一言コメント（日本語）"
 }`
 

@@ -49,6 +49,7 @@ export default function MealPage() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [recalculating, setRecalculating] = useState<boolean[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -336,13 +337,37 @@ export default function MealPage() {
                     autoFocus
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
-                    onBlur={() => {
-                      if (editingName.trim()) {
-                        const updated = [...analysisResult.foods];
-                        updated[i] = { ...updated[i], name: editingName.trim() };
-                        setAnalysisResult({ ...analysisResult, foods: updated });
-                      }
+                    onBlur={async () => {
+                      const newName = editingName.trim();
                       setEditingIndex(null);
+                      if (!newName || newName === food.name) return;
+
+                      // 新しい料理名でカロリーを自動再計算
+                      setRecalculating((prev) => { const a = [...prev]; a[i] = true; return a; });
+                      try {
+                        const res = await fetch("/api/analyze-food", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ foodName: newName }),
+                        });
+                        const data = await res.json();
+                        const updated = [...analysisResult.foods];
+                        updated[i] = {
+                          name: newName,
+                          calories: data.calories ?? food.calories,
+                          protein: data.protein ?? food.protein,
+                        };
+                        const newTotal = updated.reduce((s, f) => s + f.calories, 0);
+                        const newProtein = updated.reduce((s, f) => s + f.protein, 0);
+                        setAnalysisResult({ ...analysisResult, foods: updated, total_calories: newTotal, total_protein: newProtein });
+                      } catch {
+                        // エラー時は名前だけ更新
+                        const updated = [...analysisResult.foods];
+                        updated[i] = { ...updated[i], name: newName };
+                        setAnalysisResult({ ...analysisResult, foods: updated });
+                      } finally {
+                        setRecalculating((prev) => { const a = [...prev]; a[i] = false; return a; });
+                      }
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") (e.target as HTMLInputElement).blur();
@@ -369,8 +394,14 @@ export default function MealPage() {
                   </button>
                 )}
                 <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "8px" }}>
-                  <span style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "15px" }}>{food.calories}kcal</span>
-                  <span style={{ color: "var(--gray)", fontSize: "11px", marginLeft: "8px" }}>P: {food.protein}g</span>
+                  {recalculating[i] ? (
+                    <span style={{ color: "var(--gray-l)", fontWeight: 700, fontSize: "13px" }}>計算中...</span>
+                  ) : (
+                    <>
+                      <span style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "15px" }}>{food.calories}kcal</span>
+                      <span style={{ color: "var(--gray)", fontSize: "11px", marginLeft: "8px" }}>P: {food.protein}g</span>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

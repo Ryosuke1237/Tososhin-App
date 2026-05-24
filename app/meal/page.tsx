@@ -56,6 +56,7 @@ export default function MealPage() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
   const [recalculating, setRecalculating] = useState<boolean[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isAddingFood, setIsAddingFood] = useState(false);
   const [addingFoodName, setAddingFoodName] = useState("");
   const [isAddingCalc, setIsAddingCalc] = useState(false);
@@ -179,6 +180,24 @@ export default function MealPage() {
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    const supabase = getSupabase();
+    if (supabase) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: dbError } = await (supabase as any)
+        .from("meal_logs")
+        .delete()
+        .eq("id", id);
+      if (dbError) {
+        setError("削除に失敗しました: " + dbError.message);
+        setDeletingId(null);
+        return;
+      }
+    }
+    setSavedMeals((prev) => prev.filter((m) => m.id !== id));
+    setDeletingId(null);
   };
 
   const handleSave = async () => {
@@ -736,34 +755,89 @@ export default function MealPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {savedMeals.map((meal) => (
               <div key={meal.id} style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
                 padding: "12px 16px", background: "var(--dark)", borderRadius: "10px",
                 borderLeft: "3px solid var(--border)",
               }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "11px", color: "var(--gray)", fontWeight: 700 }}>
-                      {new Date(meal.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    <span style={{
-                      fontSize: "10px", padding: "2px 8px", background: "var(--border)",
-                      borderRadius: "10px", color: "var(--gray-l)", fontWeight: 700,
-                    }}>
-                      {meal.meal_type}
-                    </span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  {/* 左：時間・タイプ・料理名 */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--gray)", fontWeight: 700 }}>
+                        {new Date(meal.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <span style={{
+                        fontSize: "10px", padding: "2px 8px", background: "var(--border)",
+                        borderRadius: "10px", color: "var(--gray-l)", fontWeight: 700,
+                      }}>
+                        {meal.meal_type}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--white)" }}>{meal.foods}</p>
                   </div>
-                  <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--white)" }}>{meal.foods}</p>
+
+                  {/* 右：カロリー・栄養素・削除ボタン */}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", flexShrink: 0, marginLeft: "8px" }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "16px", marginBottom: "4px" }}>
+                        {meal.total_calories}<span style={{ fontSize: "10px", fontWeight: 600 }}>kcal</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                        <span style={{ color: "#60a5fa", fontSize: "11px" }}>蛋:{meal.total_protein}g</span>
+                        <span style={{ color: "#ffffff", fontSize: "11px" }}>糖:{meal.total_carbs ?? 0}g</span>
+                        <span style={{ color: "#fbbf24", fontSize: "11px" }}>脂:{meal.total_fat ?? 0}g</span>
+                      </div>
+                    </div>
+
+                    {/* 削除ボタン */}
+                    <button
+                      onClick={() => setDeletingId(meal.id)}
+                      title="削除"
+                      style={{
+                        width: "28px", height: "28px", borderRadius: "6px", border: "1px solid var(--border)",
+                        background: "transparent", color: "var(--gray)", cursor: "pointer",
+                        fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ color: "var(--red-b)", fontWeight: 800, fontSize: "16px", marginBottom: "4px" }}>
-                    {meal.total_calories}<span style={{ fontSize: "10px", fontWeight: 600 }}>kcal</span>
+
+                {/* 2段階確認 */}
+                {deletingId === meal.id && (
+                  <div style={{
+                    marginTop: "10px", padding: "10px 14px", background: "rgba(204,0,0,0.1)",
+                    border: "1px solid rgba(204,0,0,0.3)", borderRadius: "8px",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
+                  }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--red-b)" }}>
+                      ⚠️ 本当に削除しますか？
+                    </span>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        onClick={() => handleDelete(meal.id)}
+                        style={{
+                          padding: "6px 14px", borderRadius: "6px", border: "none",
+                          background: "var(--red)", color: "var(--white)",
+                          fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                        }}
+                      >
+                        削除する
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(null)}
+                        style={{
+                          padding: "6px 14px", borderRadius: "6px", border: "1px solid var(--border)",
+                          background: "transparent", color: "var(--gray)",
+                          fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                        }}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                    <span style={{ color: "#60a5fa", fontSize: "11px" }}>蛋:{meal.total_protein}g</span>
-                    <span style={{ color: "#ffffff", fontSize: "11px" }}>糖:{meal.total_carbs ?? 0}g</span>
-                    <span style={{ color: "#fbbf24", fontSize: "11px" }}>脂:{meal.total_fat ?? 0}g</span>
-                  </div>
-                </div>
+                )}
               </div>
             ))}
           </div>

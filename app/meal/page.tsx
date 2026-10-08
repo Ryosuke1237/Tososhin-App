@@ -3,6 +3,12 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { getTodayLabel } from "@/lib/mockData";
 import { createClient } from "@supabase/supabase-js";
+import {
+  calculateNutritionTargets,
+  type BodyProfile,
+  type NutritionTargets,
+  ACTIVITY_LABELS,
+} from "@/lib/nutritionCalc";
 
 // クライアントサイド用Supabaseクライアント（シングルトン）
 let _supabase: ReturnType<typeof createClient> | null = null;
@@ -43,6 +49,73 @@ type SavedMeal = {
   total_fat: number;
 };
 
+// ── レーダーチャート（SVG）──────────────────────────────────────────
+function RadarChart({
+  actual,
+  targets,
+  mealCount,
+}: {
+  actual: { calories: number; protein: number; carbs: number; fat: number };
+  targets: NutritionTargets;
+  mealCount: number;
+}) {
+  const cx = 160, cy = 155, r = 90, labelR = 122;
+  const axes = [
+    { label: "カロリー", pct: targets.targetCalories > 0 ? actual.calories / targets.targetCalories : 0 },
+    { label: "蛋白質",   pct: targets.protein > 0        ? actual.protein  / targets.protein        : 0 },
+    { label: "炭水化物", pct: targets.carbs > 0          ? actual.carbs    / targets.carbs          : 0 },
+    { label: "脂質",     pct: targets.fat > 0            ? actual.fat      / targets.fat            : 0 },
+    { label: "食事回数", pct: mealCount / 4 },
+  ];
+  const n = axes.length;
+  const ang  = (i: number) => (2 * Math.PI * i) / n - Math.PI / 2;
+  const px   = (i: number, f: number) => cx + r * f * Math.cos(ang(i));
+  const py   = (i: number, f: number) => cy + r * f * Math.sin(ang(i));
+  const poly = (f: number | ((i: number) => number)) =>
+    Array.from({ length: n }, (_, i) => {
+      const fv = typeof f === "function" ? f(i) : f;
+      return `${px(i, fv)},${py(i, fv)}`;
+    }).join(" ");
+
+  const anchor = (i: number) => {
+    const a = ang(i) * (180 / Math.PI);
+    if (Math.abs(a) < 20 || Math.abs(a) > 160) return "middle";
+    return Math.cos(ang(i)) > 0 ? "start" : "end";
+  };
+
+  return (
+    <svg viewBox="0 0 320 310" style={{ width: "100%", maxWidth: "320px", display: "block", margin: "0 auto" }}>
+      {[0.25, 0.5, 0.75, 1.0].map((g) => (
+        <polygon key={g} points={poly(g)} fill="none"
+          stroke={g === 1 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.07)"}
+          strokeWidth={g === 1 ? 1 : 0.8} strokeDasharray={g < 1 ? "3,3" : undefined} />
+      ))}
+      {Array.from({ length: n }, (_, i) => (
+        <line key={i} x1={cx} y1={cy} x2={px(i, 1)} y2={py(i, 1)}
+          stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      ))}
+      <polygon points={poly((i) => Math.min(axes[i].pct, 1.4))}
+        fill="rgba(255,50,50,0.15)" stroke="rgba(220,40,40,0.9)" strokeWidth="2" />
+      {axes.map((ax, i) => {
+        const lx = cx + labelR * Math.cos(ang(i));
+        const ly = cy + labelR * Math.sin(ang(i));
+        const color = ax.pct >= 0.85 && ax.pct <= 1.15 ? "#4ade80"
+          : ax.pct > 1.15 ? "#fbbf24" : "rgba(255,255,255,0.75)";
+        return (
+          <g key={i}>
+            <text x={lx} y={ly - 7} textAnchor={anchor(i)} fontSize="9.5" fontWeight="700"
+              fill="rgba(255,255,255,0.55)">{ax.label}</text>
+            <text x={lx} y={ly + 7} textAnchor={anchor(i)} fontSize="11" fontWeight="800" fill={color}>
+              {Math.round(ax.pct * 100)}%
+            </text>
+          </g>
+        );
+      })}
+      <circle cx={cx} cy={cy} r="3" fill="rgba(255,255,255,0.35)" />
+    </svg>
+  );
+}
+
 export default function MealPage() {
   const dateLabel = getTodayLabel();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +143,62 @@ export default function MealPage() {
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
+  // ── プロフィール & 栄養目標 ──
+  const DEFAULT_FORM: BodyProfile = {
+    gender: "male", age: 30, height: 170, weight: 70, bodyFat: 20,
+    activityLevel: "moderate", goalWeight: 70, goalBodyFat: 15,
+  };
+  const [profile, setProfile] = useState<BodyProfile | null>(null);
+  const [targets, setTargets] = useState<NutritionTargets | null>(null);
+  const [profileForm, setProfileForm] = useState<BodyProfile>(DEFAULT_FORM);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [advice, setAdvice] = useState<string | null>(null);
+  const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
+
+  // ── プロフィールをlocalStorageから復元 ──
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("tososhin_body_profile");
+      if (saved) {
+        const p: BodyProfile = JSON.parse(saved);
+        setProfile(p);
+        setProfileForm(p);
+        setTargets(calculateNutritionTargets(p));
+      } else {
+        setIsProfileOpen(true); // 未設定なら自動展開
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleProfileSave = () => {
+    const t = calculateNutritionTargets(profileForm);
+    setProfile(profileForm);
+    setTargets(t);
+    setIsProfileOpen(false);
+    setAdvice(null);
+    try { localStorage.setItem("tososhin_body_profile", JSON.stringify(profileForm)); } catch { /* ignore */ }
+  };
+
+  const handleGetAdvice = async () => {
+    if (!profile || !targets) return;
+    setIsLoadingAdvice(true);
+    setAdvice(null);
+    try {
+      const res = await fetch("/api/fitness-advice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile, targets }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      setAdvice(data.advice);
+    } catch (err) {
+      setAdvice("⚠️ " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setIsLoadingAdvice(false);
+    }
+  };
+
   // ── 起動時：ユーザーIDと今日の食事記録を取得 ──
   useEffect(() => {
     const init = async () => {
@@ -81,24 +210,24 @@ export default function MealPage() {
 
       // プロフィール取得
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: profile, error: profileError } = await (supabase as any)
+      const { data: dbProfile, error: profileError } = await (supabase as any)
         .from("profiles")
         .select("id")
         .limit(1)
         .single();
 
-      if (profileError || !profile) {
+      if (profileError || !dbProfile) {
         setError("⚠️ プロフィール取得失敗: " + (profileError?.message ?? "データなし"));
         return;
       }
-      setUserId(profile.id);
+      setUserId(dbProfile.id);
 
       // 今日の食事記録を取得
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: logs } = await (supabase as any)
         .from("meal_logs")
         .select("*")
-        .eq("user_id", profile.id)
+        .eq("user_id", dbProfile.id)
         .eq("date", today)
         .order("created_at", { ascending: true });
 
@@ -276,6 +405,217 @@ export default function MealPage() {
           <span style={{ fontSize: "11px", color: "var(--gray)", fontWeight: 700 }}>○ ローカルモード</span>
         )}
       </div>
+
+      {/* ════════════════════════════════════════
+          身体プロフィール & 目標設定
+      ════════════════════════════════════════ */}
+      <div className="card" style={{ padding: "20px" }}>
+        <button
+          onClick={() => setIsProfileOpen((v) => !v)}
+          style={{
+            width: "100%", background: "none", border: "none",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            cursor: "pointer", padding: 0,
+          }}
+        >
+          <span style={{ fontWeight: 800, fontSize: "14px", color: "var(--white)" }}>
+            🏋️ 身体プロフィール & 目標設定
+          </span>
+          <span style={{ fontSize: "11px", color: "var(--gray)" }}>
+            {profile
+              ? `${profile.weight}kg / 体脂肪${profile.bodyFat}% → ${profile.goalWeight}kg / ${profile.goalBodyFat}%`
+              : "未設定"} {isProfileOpen ? "▲" : "▼"}
+          </span>
+        </button>
+
+        {isProfileOpen && (
+          <div style={{ marginTop: "16px" }}>
+            {/* 性別 */}
+            <div style={{ marginBottom: "14px" }}>
+              <p style={{ fontSize: "11px", color: "var(--gray)", marginBottom: "6px", fontWeight: 700 }}>性別</p>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {(["male", "female"] as const).map((g) => (
+                  <button key={g}
+                    onClick={() => setProfileForm((f) => ({ ...f, gender: g }))}
+                    style={{
+                      flex: 1, padding: "8px", borderRadius: "8px",
+                      border: `1px solid ${profileForm.gender === g ? "var(--red)" : "var(--border)"}`,
+                      background: profileForm.gender === g ? "var(--red)" : "transparent",
+                      color: "var(--white)", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                    }}
+                  >
+                    {g === "male" ? "♂ 男性" : "♀ 女性"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 数値入力 2列グリッド */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
+              {([
+                ["年齢", "age", "歳", 10, 100],
+                ["身長", "height", "cm", 100, 250],
+                ["現在の体重", "weight", "kg", 30, 200],
+                ["体脂肪率", "bodyFat", "%", 3, 60],
+                ["目標体重", "goalWeight", "kg", 30, 200],
+                ["目標体脂肪率", "goalBodyFat", "%", 3, 60],
+              ] as [string, keyof BodyProfile, string, number, number][]).map(([label, key, unit, min, max]) => (
+                <div key={key}>
+                  <p style={{ fontSize: "10px", color: "var(--gray)", marginBottom: "4px", fontWeight: 700 }}>{label}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <input
+                      type="number" min={min} max={max}
+                      value={profileForm[key] as number}
+                      onChange={(e) => setProfileForm((f) => ({ ...f, [key]: Number(e.target.value) }))}
+                      style={{
+                        flex: 1, padding: "8px 10px", background: "var(--dark)",
+                        border: "1px solid var(--border)", borderRadius: "8px",
+                        color: "var(--white)", fontSize: "15px", fontWeight: 700, outline: "none",
+                        textAlign: "right",
+                      }}
+                    />
+                    <span style={{ fontSize: "11px", color: "var(--gray)", flexShrink: 0 }}>{unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 活動量 */}
+            <div style={{ marginBottom: "16px" }}>
+              <p style={{ fontSize: "11px", color: "var(--gray)", marginBottom: "6px", fontWeight: 700 }}>活動レベル</p>
+              <select
+                value={profileForm.activityLevel}
+                onChange={(e) => setProfileForm((f) => ({ ...f, activityLevel: e.target.value as BodyProfile["activityLevel"] }))}
+                style={{
+                  width: "100%", padding: "10px 12px", background: "var(--dark)",
+                  border: "1px solid var(--border)", borderRadius: "8px",
+                  color: "var(--white)", fontSize: "13px", fontWeight: 700, outline: "none",
+                }}
+              >
+                {Object.entries(ACTIVITY_LABELS).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <button className="btn-primary" onClick={handleProfileSave} style={{ width: "100%" }}>
+              💾 保存して目標カロリーを計算する
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ════════════════════════════════════════
+          目標栄養素 & レーダーチャート
+      ════════════════════════════════════════ */}
+      {targets && profile && (
+        <div className="card" style={{ padding: "20px" }}>
+          <div className="card-header" style={{ marginBottom: "4px" }}>
+            <span className="card-title">📊 栄養バランス レーダーチャート</span>
+            <span className="card-sub">今日の達成率</span>
+          </div>
+
+          {/* 目標値サマリー */}
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "6px",
+            marginBottom: "14px", padding: "10px 12px",
+            background: "var(--dark)", borderRadius: "10px",
+          }}>
+            {[
+              { label: "目標", value: `${targets.targetCalories}`, unit: "kcal", color: "var(--red-b)" },
+              { label: "蛋白", value: `${targets.protein}`, unit: "g", color: "#60a5fa" },
+              { label: "糖質", value: `${targets.carbs}`, unit: "g", color: "#ffffff" },
+              { label: "脂質", value: `${targets.fat}`, unit: "g", color: "#fbbf24" },
+            ].map((item) => (
+              <div key={item.label} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "10px", color: "var(--gray)", fontWeight: 700 }}>{item.label}</div>
+                <div style={{ color: item.color, fontWeight: 800, fontSize: "14px" }}>
+                  {item.value}<span style={{ fontSize: "9px" }}>{item.unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <RadarChart
+            actual={{
+              calories: totalCaloriesToday,
+              protein: totalProteinToday,
+              carbs: totalCarbsToday,
+              fat: totalFatToday,
+            }}
+            targets={targets}
+            mealCount={savedMeals.length}
+          />
+
+          {/* 凡例 */}
+          <div style={{ display: "flex", gap: "16px", justifyContent: "center", marginTop: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ width: "20px", height: "2px", background: "rgba(220,40,40,0.9)" }} />
+              <span style={{ fontSize: "10px", color: "var(--gray)" }}>今日の摂取量</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ width: "20px", height: "1px", background: "rgba(255,255,255,0.25)", borderTop: "1px dashed rgba(255,255,255,0.25)" }} />
+              <span style={{ fontSize: "10px", color: "var(--gray)" }}>目標（100%）</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════
+          AI フィットネスアドバイス
+      ════════════════════════════════════════ */}
+      {profile && targets && (
+        <div className="card" style={{ padding: "20px" }}>
+          <div className="card-header" style={{ marginBottom: "12px" }}>
+            <span className="card-title">🤖 AIフィットネスアドバイス</span>
+            <span className="card-sub" style={{ fontSize: "10px" }}>高橋代表 監修</span>
+          </div>
+
+          {!advice && (
+            <button
+              className="btn-primary"
+              onClick={handleGetAdvice}
+              disabled={isLoadingAdvice}
+              style={{ width: "100%", opacity: isLoadingAdvice ? 0.7 : 1 }}
+            >
+              {isLoadingAdvice ? "🤖 アドバイスを生成中..." : "🥊 食事＆トレーニングアドバイスを取得する"}
+            </button>
+          )}
+
+          {advice && (
+            <div>
+              <div style={{
+                fontSize: "13px", lineHeight: "1.75", color: "var(--gray-l)",
+                whiteSpace: "pre-wrap",
+              }}>
+                {advice.split("\n").map((line, i) => (
+                  <p key={i} style={{
+                    marginBottom: line.startsWith("##") ? "8px" : "4px",
+                    fontWeight: line.startsWith("##") ? 800 : 400,
+                    fontSize: line.startsWith("##") ? "14px" : "13px",
+                    color: line.startsWith("##") ? "var(--white)" : "var(--gray-l)",
+                  }}>
+                    {line}
+                  </p>
+                ))}
+              </div>
+              <button
+                onClick={handleGetAdvice}
+                disabled={isLoadingAdvice}
+                style={{
+                  marginTop: "12px", width: "100%", padding: "10px",
+                  borderRadius: "8px", border: "1px solid var(--border)",
+                  background: "transparent", color: "var(--gray)",
+                  fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                  opacity: isLoadingAdvice ? 0.5 : 1,
+                }}
+              >
+                {isLoadingAdvice ? "生成中..." : "🔄 再生成する"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── 今日の合計 ── */}
       {savedMeals.length > 0 && (
